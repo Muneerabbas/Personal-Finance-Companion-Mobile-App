@@ -1,12 +1,16 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
+  Extrapolate,
+  interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -48,16 +52,107 @@ function AnimatedTabIcon({
   return <Animated.View style={[styles.iconWrap, animatedStyle]}>{children}</Animated.View>;
 }
 
+const FAB_SPRING_OPEN = { damping: 18, stiffness: 260, mass: 0.85 };
+const FAB_SPRING_CLOSE = { damping: 22, stiffness: 280, mass: 0.9 };
+
 export default function TabLayout() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
   const [fabOpen, setFabOpen] = useState(false);
+  const fabProgress = useSharedValue(0);
   const safeBottomInset = Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 10);
   const tabBarBottom = 0;
   const tabBarHeight = 92 + safeBottomInset;
   const tabBarPaddingBottom = Math.max(safeBottomInset, 10);
   const centerButtonBottom = tabBarPaddingBottom +42;
+
+  const closeFab = () => {
+    fabProgress.value = withSpring(0, FAB_SPRING_CLOSE, (finished) => {
+      if (finished) {
+        runOnJS(setFabOpen)(false);
+      }
+    });
+  };
+
+  const openFab = () => {
+    setFabOpen(true);
+    fabProgress.value = 0;
+    fabProgress.value = withSpring(1, FAB_SPRING_OPEN);
+  };
+
+  const toggleFab = () => {
+    if (fabOpen) {
+      closeFab();
+    } else {
+      openFab();
+    }
+  };
+
+  const handleFabActionPress = (route: '/expense' | '/income' | '/transfer') => {
+    closeFab();
+    router.push(route);
+  };
+
+  const fabIconStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        rotate: `${interpolate(fabProgress.value, [0, 1], [0, 45], Extrapolate.CLAMP)}deg`,
+      },
+    ],
+  }));
+
+  const fabButtonStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        scale: interpolate(fabProgress.value, [0, 1], [1, 0.96], Extrapolate.CLAMP),
+      },
+    ],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(fabProgress.value, [0, 1], [0, 0.28], Extrapolate.CLAMP),
+  }));
+
+  const actionStyleBlue = useAnimatedStyle(() => {
+    const t = interpolate(fabProgress.value, [0.05, 0.52], [0, 1], Extrapolate.CLAMP);
+    const scale = interpolate(t, [0, 1], [0.4, 1], Extrapolate.CLAMP);
+    return {
+      opacity: t,
+      transform: [
+        { translateX: -72 * t },
+        { translateY: -54 * t },
+        { scale },
+      ],
+    };
+  });
+
+  const actionStyleGreen = useAnimatedStyle(() => {
+    const t = interpolate(fabProgress.value, [0.12, 0.58], [0, 1], Extrapolate.CLAMP);
+    const scale = interpolate(t, [0, 1], [0.4, 1], Extrapolate.CLAMP);
+    return {
+      opacity: t,
+      transform: [
+        { translateX: 0 },
+        { translateY: -86 * t },
+        { scale },
+      ],
+    };
+  });
+
+  const actionStyleRed = useAnimatedStyle(() => {
+    const t = interpolate(fabProgress.value, [0.18, 0.64], [0, 1], Extrapolate.CLAMP);
+    const scale = interpolate(t, [0, 1], [0.4, 1], Extrapolate.CLAMP);
+    return {
+      opacity: t,
+      transform: [
+        { translateX: 72 * t },
+        { translateY: -54 * t },
+        { scale },
+      ],
+    };
+  });
 
   return (
     <View style={styles.container}>
@@ -126,7 +221,7 @@ export default function TabLayout() {
                 accessibilityLabel={accessibilityLabel}
                 accessibilityRole="button"
                 accessibilityState={accessibilityState}
-                onPress={() => setFabOpen((prev) => !prev)}
+                onPress={toggleFab}
                 onLongPress={onLongPress}
                 style={styles.addTabSpacer}
                 testID={testID}
@@ -161,7 +256,9 @@ export default function TabLayout() {
 
       {fabOpen ? (
         <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          <Pressable style={styles.backdrop} onPress={() => setFabOpen(false)} />
+          <Pressable style={styles.backdropHit} onPress={closeFab}>
+            <Animated.View pointerEvents="none" style={[styles.backdropFill, backdropStyle]} />
+          </Pressable>
           <View
             pointerEvents="box-none"
             style={[
@@ -170,33 +267,43 @@ export default function TabLayout() {
                 bottom: centerButtonBottom,
               },
             ]}>
-            <Pressable style={[styles.actionButton, styles.actionBlue]} onPress={() => setFabOpen(false)}>
-              <MaterialCommunityIcons name="swap-horizontal" size={28} color="#FFFFFF" />
-            </Pressable>
-            <Pressable style={[styles.actionButton, styles.actionGreen]} onPress={() => setFabOpen(false)}>
-              <MaterialCommunityIcons name="wallet-plus-outline" size={28} color="#FFFFFF" />
-            </Pressable>
-            <Pressable style={[styles.actionButton, styles.actionRed]} onPress={() => setFabOpen(false)}>
-              <MaterialCommunityIcons name="help" size={30} color="#FFFFFF" />
-            </Pressable>
+            <Animated.View style={[styles.actionButton, styles.actionBlueBase, actionStyleBlue]}>
+              <Pressable style={styles.actionHit} onPress={() => handleFabActionPress('/transfer')}>
+                <MaterialCommunityIcons name="swap-horizontal" size={28} color="#FFFFFF" />
+              </Pressable>
+            </Animated.View>
+            <Animated.View style={[styles.actionButton, styles.actionGreenBase, actionStyleGreen]}>
+              <Pressable style={styles.actionHit} onPress={() => handleFabActionPress('/income')}>
+                <MaterialCommunityIcons name="wallet-plus-outline" size={28} color="#FFFFFF" />
+              </Pressable>
+            </Animated.View>
+            <Animated.View style={[styles.actionButton, styles.actionRedBase, actionStyleRed]}>
+              <Pressable style={styles.actionHit} onPress={() => handleFabActionPress('/expense')}>
+                <MaterialCommunityIcons name="help" size={30} color="#FFFFFF" />
+              </Pressable>
+            </Animated.View>
           </View>
         </View>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setFabOpen((prev) => !prev)}
+      <Animated.View
         style={[
           styles.centerButton,
+          fabButtonStyle,
           {
             backgroundColor: theme.primary,
             bottom: centerButtonBottom,
           },
         ]}>
-        <View style={fabOpen ? styles.fabIconOpen : undefined}>
-          <PlusTabIcon color="#FFFFFF" size={32} />
-        </View>
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={toggleFab}
+          style={styles.centerButtonHit}>
+          <Animated.View style={fabIconStyle}>
+            <PlusTabIcon color="#FFFFFF" size={32} />
+          </Animated.View>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 }
@@ -244,16 +351,19 @@ const styles = StyleSheet.create({
   addTabSpacer: {
     width: 84,
   },
-  backdrop: {
+  backdropHit: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
+  },
+  backdropFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0F0B1A',
   },
   centerButton: {
     position: 'absolute',
     alignSelf: 'center',
     width: 60,
     height: 60,
-    borderRadius: 34,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#7F3DFF',
@@ -261,6 +371,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 18,
     elevation: 16,
+  },
+  centerButtonHit: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionCluster: {
     position: 'absolute',
@@ -284,19 +400,19 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 12,
   },
-  actionBlue: {
+  actionHit: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBlueBase: {
     backgroundColor: '#1A73E8',
-    transform: [{ translateX: -72 }, { translateY: -54 }],
   },
-  actionGreen: {
+  actionGreenBase: {
     backgroundColor: '#13B36B',
-    transform: [{ translateX: 0 }, { translateY: -86 }],
   },
-  actionRed: {
+  actionRedBase: {
     backgroundColor: '#FF4D5E',
-    transform: [{ translateX: 72 }, { translateY: -54 }],
-  },
-  fabIconOpen: {
-    transform: [{ rotate: '45deg' }],
   },
 });
