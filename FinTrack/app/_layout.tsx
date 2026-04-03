@@ -11,6 +11,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { PaperProvider } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
 import { Colors } from '@/constants/theme';
@@ -45,7 +46,8 @@ export default function RootLayout() {
   const navigationTheme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
 
   return (
-    <PaperProvider>
+    <SafeAreaProvider>
+      <PaperProvider>
       <ThemeProvider
         value={{
           ...navigationTheme,
@@ -59,11 +61,14 @@ export default function RootLayout() {
           },
         }}>
         <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
-    </PaperProvider>
+      </PaperProvider>
+    </SafeAreaProvider>
   );
 }
