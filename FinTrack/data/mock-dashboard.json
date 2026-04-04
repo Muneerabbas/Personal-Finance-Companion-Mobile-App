@@ -1,0 +1,208 @@
+{
+  "defaultTimeFilter": "Month",
+  "balance": {
+    "amountUsd": 42850,
+    "trend": "+4.2% this month"
+  },
+  "incomeExpense": {
+    "incomeUsd": 12400,
+    "expensesUsd": 8120.5
+  },
+  "spendingTrends": {
+    "Today": [
+      { "value": 52, "label": "Sat 4", "amountUsd": 520 }
+    ],
+    "Week": [
+      { "value": 22, "label": "Mon", "amountUsd": 220 },
+      { "value": 35, "label": "Tue", "amountUsd": 350 },
+      { "value": 28, "label": "Wed", "amountUsd": 280 },
+      { "value": 44, "label": "Thu", "amountUsd": 440 },
+      { "value": 31, "label": "Fri", "amountUsd": 310 },
+      { "value": 48, "label": "Sat", "amountUsd": 480 },
+      { "value": 26, "label": "Sun", "amountUsd": 260 }
+    ],
+    "Month": [
+      { "value": 24, "label": "Oct 18", "amountUsd": 18400 },
+      { "value": 31, "label": "Oct 19", "amountUsd": 23100 },
+      { "value": 48, "label": "Oct 20", "amountUsd": 28900 },
+      { "value": 66, "label": "Oct 21", "amountUsd": 35700 },
+      { "value": 61, "label": "Oct 22", "amountUsd": 33200 },
+      { "value": 70, "label": "Oct 23", "amountUsd": 38500 },
+      { "value": 78, "label": "Oct 24", "amountUsd": 41200 },
+      { "value": 74, "label": "Oct 25", "amountUsd": 39600 },
+      { "value": 82, "label": "Oct 26", "amountUsd": 42800 }
+    ],
+    "Year": [
+      { "value": 42, "label": "Jan", "amountUsd": 4200 },
+      { "value": 38, "label": "Feb", "amountUsd": 3800 },
+      { "value": 55, "label": "Mar", "amountUsd": 5500 },
+      { "value": 48, "label": "Apr", "amountUsd": 4800 },
+      { "value": 62, "label": "May", "amountUsd": 6200 },
+      { "value": 58, "label": "Jun", "amountUsd": 5800 },
+      { "value": 71, "label": "Jul", "amountUsd": 7100 },
+      { "value": 65, "label": "Aug", "amountUsd": 6500 },
+      { "value": 52, "label": "Sep", "amountUsd": 5200 },
+      { "value": 68, "label": "Oct", "amountUsd": 6800 },
+      { "value": 59, "label": "Nov", "amountUsd": 5900 },
+      { "value": 76, "label": "Dec", "amountUsd": 7600 }
+    ]
+  },
+  "chart": {
+    "activeIndexByFilter": {
+      "Today": 0,
+      "Week": 5,
+      "Month": 6,
+      "Year": 9
+    }
+  },
+  "transactionCategories": [
+    "Business Income",
+    "Coffee & Dining",
+    "Education",
+    "Electronics",
+    "Entertainment",
+    "Fees & Charges",
+    "Groceries",
+    "Health & Fitness",
+    "Healthcare",
+    "Other",
+    "Personal Care",
+    "Rent & Housing",
+    "Salary",
+    "Shopping",
+    "Subscriptions",
+    "Transport",
+    "Travel",
+    "Utilities"
+  ],
+  "incomeCategories": [
+    "Salary",
+    "Freelance",
+    "Investment returns",
+    "Gifts & refunds",
+    "Other"
+  ],
+  "wallets": [
+    "Debit Card",
+    "Credit Card",
+    "Apple Pay",
+    "Google Pay",
+    "Cash",
+    "Bank Transfer",
+    "PayPal",
+    "External Transfer",
+    "Other"
+  ],
+  "transactions": [
+    {
+      "id": "1",
+      "title": "Starbucks Reserve",
+      "category": "Coffee & Dining",
+      "timeLabel": "10:45 AM",
+      "amount": -12.5,
+      "paymentMethod": "Debit Card",
+      "icon": "cafe",
+      "iconBackground": "#FFF4E6",
+      "iconColor": "#C2410C"
+    },
+    {
+      "id": "2",
+      "title": "Apple Store",
+      "category": "Electronics",
+      "timeLabel": "Oct 12",
+      "amount": -1299,
+      "paymentMethod": "Apple Pay",
+      "icon": "phone-portrait",
+      "iconBackground": "#E0F2FE",
+      "iconColor": "#0369A1"
+    },
+    {
+      "id": "3",
+      "title": "Stripe Payout",
+      "category": "Business Income",
+      "timeLabel": "Oct 11",
+      "amount": 4200,
+      "paymentMethod": "External Transfer",
+      "icon": "wallet",
+      "iconBackground": "#DCFCE7",
+      "iconColor": "#15803D"
+    },
+    {
+      "id": "4",
+      "title": "Whole Foods",
+      "category": "Groceries",
+      "timeLabel": "6:20 PM",
+      "amount": -86.42,
+      "paymentMethod": "Debit Card",
+      "icon": "bag-handle",
+      "iconBackground": "#F3E8FF",
+      "iconColor": "#7C3AED"
+    },
+    {
+      "id": "5",
+      "title": "Netflix",
+      "category": "Subscriptions",
+      "timeLabel": "Oct 10",
+      "amount": -15.99,
+      "paymentMethod": "Credit Card",
+      "icon": "film",
+      "iconBackground": "#FEE2E2",
+      "iconColor": "#B91C1C"
+    },
+    {
+      "id": "6",
+      "title": "Uber",
+      "category": "Transport",
+      "timeLabel": "Oct 9 · 8:12 PM",
+      "amount": -24.6,
+      "paymentMethod": "Apple Pay",
+      "icon": "car",
+      "iconBackground": "#EEF2FF",
+      "iconColor": "#4F46E5"
+    },
+    {
+      "id": "7",
+      "title": "ACME Payroll",
+      "category": "Salary",
+      "timeLabel": "Oct 1",
+      "amount": 5850,
+      "paymentMethod": "Direct Deposit",
+      "icon": "briefcase",
+      "iconBackground": "#ECFDF5",
+      "iconColor": "#047857"
+    },
+    {
+      "id": "8",
+      "title": "City Power & Light",
+      "category": "Utilities",
+      "timeLabel": "Sep 28",
+      "amount": -112.4,
+      "paymentMethod": "Bank Transfer",
+      "icon": "flash",
+      "iconBackground": "#FEF9C3",
+      "iconColor": "#CA8A04"
+    },
+    {
+      "id": "9",
+      "title": "Planet Fitness",
+      "category": "Health & Fitness",
+      "timeLabel": "Sep 25",
+      "amount": -29.99,
+      "paymentMethod": "Debit Card",
+      "icon": "barbell",
+      "iconBackground": "#F1F5F9",
+      "iconColor": "#475569"
+    },
+    {
+      "id": "10",
+      "title": "Spotify",
+      "category": "Subscriptions",
+      "timeLabel": "Sep 22",
+      "amount": -10.99,
+      "paymentMethod": "PayPal",
+      "icon": "musical-notes",
+      "iconBackground": "#DCFCE7",
+      "iconColor": "#15803D"
+    }
+  ]
+}

@@ -1,26 +1,45 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Fonts } from '@/constants/theme';
+import { ThemedText } from '@/components/themed-text';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const FILTERS = ['Today', 'Week', 'Month', 'Year'] as const;
 
 export type TimeFilter = (typeof FILTERS)[number];
 
 type TimeFilterTabsProps = {
+  value?: TimeFilter;
+  defaultValue?: TimeFilter;
   onChange?: (value: TimeFilter) => void;
+  compact?: boolean;
 };
 
-export default function TimeFilterTabs({ onChange }: TimeFilterTabsProps) {
-  const [selected, setSelected] = useState<TimeFilter>('Today');
+export default function TimeFilterTabs({
+  value,
+  defaultValue = 'Today',
+  onChange,
+  compact = false,
+}: TimeFilterTabsProps) {
+  const [uncontrolled, setUncontrolled] = useState<TimeFilter>(defaultValue);
+  const isControlled = value !== undefined;
+  const selected = isControlled ? value : uncontrolled;
+  const isDark = (useColorScheme() ?? 'light') === 'dark';
 
-  const onSelect = (value: TimeFilter) => {
-    setSelected(value);
-    onChange?.(value);
+  const onSelect = (next: TimeFilter) => {
+    if (!isControlled) {
+      setUncontrolled(next);
+    }
+    onChange?.(next);
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        compact ? styles.containerCompact : null,
+        { backgroundColor: isDark ? '#20263C' : '#EFF1F5' },
+      ]}>
       {FILTERS.map((filter) => {
         const isActive = filter === selected;
 
@@ -28,8 +47,22 @@ export default function TimeFilterTabs({ onChange }: TimeFilterTabsProps) {
           <Pressable
             key={filter}
             onPress={() => onSelect(filter)}
-            style={[styles.tab, isActive && styles.tabActive]}>
-            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{filter}</Text>
+            style={[
+              styles.tab,
+              compact ? styles.tabCompact : null,
+              isActive && styles.tabActive,
+              isActive && { backgroundColor: '#FFFFFF' },
+            ]}>
+            <ThemedText
+              style={[
+                styles.tabText,
+                compact ? styles.tabTextCompact : null,
+                { color: isDark ? '#9AA3C2' : '#7C8296' },
+                isActive && styles.tabTextActive,
+                isActive && { color: '#6A63E8' },
+              ]}>
+              {filter}
+            </ThemedText>
           </Pressable>
         );
       })}
@@ -40,28 +73,40 @@ export default function TimeFilterTabs({ onChange }: TimeFilterTabsProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 14,
     padding: 4,
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  containerCompact: {
+    borderRadius: 12,
   },
   tab: {
-    flex: 1,
-    borderRadius: 16,
-    paddingVertical: 10,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     alignItems: 'center',
   },
+  tabCompact: {
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+  },
   tabActive: {
-    backgroundColor: '#FFF4D8',
+    shadowColor: '#A9AFC4',
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
   },
   tabText: {
-    fontFamily: Fonts.rounded,
-    color: '#9CA3AF',
-    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+  },
+  tabTextCompact: {
+    fontSize: 11,
   },
   tabTextActive: {
-    fontFamily: Fonts.bold,
-    color: '#D4A82C',
+    fontFamily: 'Poppins_700Bold',
   },
 });

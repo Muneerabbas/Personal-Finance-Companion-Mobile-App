@@ -1,20 +1,84 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import CategoryDropdown from '@/components/ui/category-dropdown';
 import PrimaryButton from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
+import { amountEntryStyles } from '@/constants/amount-entry-styles';
 import { Colors, Fonts } from '@/constants/theme';
+import { OTHER_CATEGORY_LABEL } from '@/constants/transaction-category-styles';
+import { useCurrency } from '@/context/currency-context';
+import { useTransactions } from '@/context/transactions-context';
+import { dashboardMock } from '@/data/dashboard-mock';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+function parseAmount(raw: string) {
+  const cleaned = raw.replace(/[^0-9.]/g, '');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
 
 export default function IncomeScreen() {
   const router = useRouter();
+  const { addTransaction } = useTransactions();
+  const { currencySymbol, convertDisplayToUsd } = useCurrency();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme ?? 'light'];
   const [repeat, setRepeat] = useState(false);
+  const [category, setCategory] = useState<string | null>(null);
+  const [customCategory, setCustomCategory] = useState('');
+  const [amountText, setAmountText] = useState('');
+  const [description, setDescription] = useState('');
+  const [wallet, setWallet] = useState<string | null>(null);
+  const [customWallet, setCustomWallet] = useState('');
+
+  const onCategoryChange = (c: string) => {
+    setCategory(c);
+    if (c !== OTHER_CATEGORY_LABEL) setCustomCategory('');
+  };
+
+  const onWalletChange = (w: string) => {
+    setWallet(w);
+    if (w !== OTHER_CATEGORY_LABEL) setCustomWallet('');
+  };
+
+  const submit = () => {
+    const amountUsd = convertDisplayToUsd(parseAmount(amountText));
+    if (!category) {
+      Alert.alert('Category', 'Please choose a category.');
+      return;
+    }
+    if (category === OTHER_CATEGORY_LABEL && !customCategory.trim()) {
+      Alert.alert('Category', 'Please type a name for “Other”.');
+      return;
+    }
+    if (!wallet) {
+      Alert.alert('Wallet', 'Please choose a wallet or payment method.');
+      return;
+    }
+    if (wallet === OTHER_CATEGORY_LABEL && !customWallet.trim()) {
+      Alert.alert('Wallet', 'Please type a name for “Other”.');
+      return;
+    }
+    if (amountUsd <= 0) {
+      Alert.alert('Amount', 'Enter an amount greater than zero.');
+      return;
+    }
+    const walletLabel = wallet === OTHER_CATEGORY_LABEL ? customWallet.trim() : wallet;
+    addTransaction({
+      kind: 'income',
+      categorySelection: category,
+      customCategory,
+      description,
+      amount: amountUsd,
+      wallet: walletLabel,
+    });
+    router.back();
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#10432F' : '#11A86C' }]}>
@@ -27,25 +91,51 @@ export default function IncomeScreen() {
           <View style={styles.headerRightSpacer} />
         </View>
         <ThemedText style={styles.howMuch}>How much?</ThemedText>
-        <ThemedText style={styles.amount}>$0</ThemedText>
+        <View style={amountEntryStyles.amountRow}>
+          <View style={amountEntryStyles.symbolWrap}>
+            <Text style={amountEntryStyles.symbol}>{currencySymbol}</Text>
+          </View>
+          <View style={amountEntryStyles.inputOuter}>
+            <TextInput
+              value={amountText}
+              onChangeText={setAmountText}
+              placeholder="0"
+              placeholderTextColor="rgba(255,255,255,0.45)"
+              keyboardType="decimal-pad"
+              underlineColorAndroid="transparent"
+              style={amountEntryStyles.amountInput}
+            />
+          </View>
+        </View>
       </View>
 
       <View style={[styles.formSheet, { backgroundColor: theme.card }]}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.formContent}>
-          <TextInput
+          <CategoryDropdown
+            sheetTitle="Category"
+            options={dashboardMock.incomeCategories}
+            value={category}
+            onChange={onCategoryChange}
             placeholder="Category"
-            placeholderTextColor={theme.muted}
-            style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+            otherFieldValue={customCategory}
+            onOtherFieldChange={setCustomCategory}
           />
           <TextInput
+            value={description}
+            onChangeText={setDescription}
             placeholder="Description"
             placeholderTextColor={theme.muted}
             style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
           />
-          <TextInput
+          <CategoryDropdown
+            sheetTitle="Wallet"
+            options={dashboardMock.wallets}
+            value={wallet}
+            onChange={onWalletChange}
             placeholder="Wallet"
-            placeholderTextColor={theme.muted}
-            style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+            otherFieldValue={customWallet}
+            onOtherFieldChange={setCustomWallet}
+            otherFieldPlaceholder="Type wallet or payment method"
           />
 
           <Pressable style={[styles.attachment, { borderColor: theme.border, backgroundColor: theme.background }]}>
@@ -62,7 +152,7 @@ export default function IncomeScreen() {
           </View>
         </ScrollView>
 
-        <PrimaryButton title="Continue" onPress={() => {}} style={styles.continueButton} />
+        <PrimaryButton title="Continue" onPress={submit} style={styles.continueButton} />
       </View>
     </SafeAreaView>
   );
@@ -75,13 +165,6 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFFFFF', fontFamily: Fonts.semiBold, fontSize: 20 },
   headerRightSpacer: { width: 26 },
   howMuch: { color: 'rgba(255,255,255,0.85)', fontSize: 18, marginBottom: 10, fontFamily: Fonts.sans },
-  amount: {
-    color: '#FFFFFF',
-    fontSize: 56,
-    lineHeight: 64,
-    fontFamily: Fonts.bold,
-    includeFontPadding: false,
-  },
   formSheet: {
     flex: 1,
     borderTopLeftRadius: 28,

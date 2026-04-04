@@ -1,16 +1,27 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Fonts } from '@/constants/theme';
+import { CurrencyText } from '@/components/currency-text';
+import { ThemedText } from '@/components/themed-text';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type BalanceCardProps = {
-  amount: string;
+  amountUsd: number;
+  trend: string;
 };
 
-export default function BalanceCard({ amount }: BalanceCardProps) {
+export default function BalanceCard({ amountUsd, trend }: BalanceCardProps) {
+  const isDark = (useColorScheme() ?? 'light') === 'dark';
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Account Balance</Text>
-      <Text style={styles.amount}>{amount}</Text>
+      <ThemedText style={[styles.title, { color: isDark ? '#8E97B5' : '#9AA1B5' }]}>ACCOUNT BALANCE</ThemedText>
+      <CurrencyText
+        amountUsd={amountUsd}
+        style={[styles.amount, { color: isDark ? '#F8FAFF' : '#202430' }]}
+      />
+      <View style={[styles.trendPill, { backgroundColor: isDark ? '#183226' : '#DFF7D8' }]}>
+        <ThemedText style={[styles.trendText, { color: isDark ? '#8BE19C' : '#1E8B4D' }]}>{trend}</ThemedText>
+      </View>
     </View>
   );
 }
@@ -18,18 +29,28 @@ export default function BalanceCard({ amount }: BalanceCardProps) {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   title: {
-    fontFamily: Fonts.sans,
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginBottom: 6,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    letterSpacing: 2,
+    marginBottom: 10,
   },
   amount: {
-    fontFamily: Fonts.bold,
-    fontSize: 40,
-    color: '#111827',
-    letterSpacing: 0.5,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 26,
+    lineHeight: 32,
+    marginBottom: 12,
+  },
+  trendPill: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  trendText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12,
   },
 });

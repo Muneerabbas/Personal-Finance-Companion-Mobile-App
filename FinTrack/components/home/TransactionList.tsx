@@ -1,27 +1,43 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Fonts } from '@/constants/theme';
-
+import { ThemedText } from '@/components/themed-text';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import TransactionItem, { type Transaction } from './TransactionItem';
 
 type TransactionListProps = {
   transactions: Transaction[];
   onPressSeeAll?: () => void;
+  title?: string;
+  showSeeAll?: boolean;
 };
 
-export default function TransactionList({ transactions, onPressSeeAll }: TransactionListProps) {
+export default function TransactionList({
+  transactions,
+  onPressSeeAll,
+  title = 'Recent Transactions',
+  showSeeAll = true,
+}: TransactionListProps) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
+  const accent = Colors[colorScheme].primary;
+
   return (
     <View>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Recent Transactions</Text>
-        <Pressable style={styles.seeAllButton} onPress={onPressSeeAll}>
-          <Text style={styles.seeAllText}>See All</Text>
-        </Pressable>
+        <ThemedText style={[styles.title, { color: isDark ? '#F5F7FF' : '#111827' }]}>{title}</ThemedText>
+        {showSeeAll && onPressSeeAll ? (
+          <Pressable onPress={onPressSeeAll} hitSlop={12} accessibilityRole="button" accessibilityLabel="See all transactions">
+            <ThemedText style={[styles.seeAllText, { color: accent }]}>See All</ThemedText>
+          </Pressable>
+        ) : null}
       </View>
 
-      {transactions.map((transaction) => (
-        <TransactionItem key={transaction.id} item={transaction} />
-      ))}
+      <View style={styles.list}>
+        {transactions.map((transaction) => (
+          <TransactionItem key={transaction.id} item={transaction} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -31,22 +47,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   title: {
-    fontFamily: Fonts.bold,
-    fontSize: 22,
-    color: '#111827',
-  },
-  seeAllButton: {
-    backgroundColor: '#F1E8FF',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
   },
   seeAllText: {
-    fontFamily: Fonts.semiBold,
-    color: '#7F3DFF',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
+  },
+  list: {
+    gap: 12,
+    paddingBottom: 20,
   },
 });

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CurrencyText } from '@/components/currency-text';
 import PrimaryButton from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
@@ -27,7 +28,7 @@ export default function TransferScreen() {
           <View style={styles.headerRightSpacer} />
         </View>
         <ThemedText style={styles.howMuch}>How much?</ThemedText>
-        <ThemedText style={styles.amount}>$0</ThemedText>
+        <CurrencyText amountUsd={0} style={styles.amount} />
       </View>
 
       <View style={[styles.formSheet, { backgroundColor: theme.card }]}>

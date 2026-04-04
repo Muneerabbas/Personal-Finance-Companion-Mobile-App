@@ -1,33 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
-import { Fonts } from '@/constants/theme';
+import CurrencyPickerButton from '@/components/home/CurrencyPickerButton';
+import { ThemedText } from '@/components/themed-text';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type HeaderProps = {
   month?: string;
   onPressMonth?: () => void;
-  onPressNotifications?: () => void;
 };
 
-export default function Header({
-  month = 'October',
-  onPressMonth,
-  onPressNotifications,
-}: HeaderProps) {
+export default function Header({ month = 'October', onPressMonth }: HeaderProps) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[colorScheme];
+
   return (
     <View style={styles.container}>
-      <View style={styles.avatarPlaceholder}>
-        <Ionicons name="person" size={20} color="#7F3DFF" />
+      <View
+        style={[
+          styles.avatarPlaceholder,
+          {
+            backgroundColor: isDark ? '#222941' : '#F4F6FA',
+            borderColor: isDark ? '#313A55' : '#ECEFF5',
+          },
+        ]}>
+        <Ionicons name="person" size={18} color={theme.primary} />
       </View>
 
       <TouchableOpacity style={styles.monthWrap} onPress={onPressMonth} activeOpacity={0.8}>
-        <Ionicons name="chevron-down" size={18} color="#7F3DFF" />
-        <Text style={styles.monthText}>{month}</Text>
+        <ThemedText style={[styles.monthText, { color: isDark ? '#F5F7FF' : '#2D3348' }]}>{month}</ThemedText>
+        <Ionicons name="chevron-down" size={16} color={theme.primary} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.iconButton} onPress={onPressNotifications} activeOpacity={0.8}>
-        <Ionicons name="notifications" size={22} color="#7F3DFF" />
-      </TouchableOpacity>
+      <CurrencyPickerButton />
     </View>
   );
 }
@@ -39,12 +46,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   avatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F1E8FF',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
-    borderColor: '#E2D2FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -54,15 +59,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   monthText: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 16,
-    color: '#1F2937',
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
   },
 });
