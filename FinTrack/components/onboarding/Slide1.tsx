@@ -1,34 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import { PRIMARY } from '@/app/onboarding';
+import { View, StyleSheet, Dimensions } from 'react-native';
+import { ThemedText } from '@/components/themed-text';
+import { getOnboardingColors } from '@/constants/onboarding-theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const { width } = Dimensions.get('window');
 
 export function Slide1() {
+  const scheme = useColorScheme() ?? 'light';
+  const c = getOnboardingColors(scheme);
+
   return (
-    <View style={styles.container}>
-      {/* Illustration Area */}
+    <View style={[styles.container, { backgroundColor: c.background }]}>
       <View style={styles.illustrationContainer}>
-        <View style={styles.circle}>
-          {/* Bar Chart Representation */}
+        <View style={[styles.circle, { backgroundColor: c.primaryTint }]}>
           <View style={styles.barsContainer}>
-            <View style={[styles.bar, { height: 24 }]} />
-            <View style={[styles.bar, { height: 40 }]} />
-            <View style={[styles.bar, { height: 60, backgroundColor: PRIMARY }]} />
+            <View style={[styles.bar, { height: 24, backgroundColor: c.primaryTintMedium }]} />
+            <View style={[styles.bar, { height: 40, backgroundColor: c.primaryTintMedium }]} />
+            <View style={[styles.bar, { height: 60, backgroundColor: c.primary }]} />
           </View>
-          {/* Overlay Line/Point */}
-          <View style={styles.point} />
+          <View style={[styles.point, { backgroundColor: c.primary, borderColor: c.badgeSurface }]} />
         </View>
       </View>
 
-      {/* Text Content */}
       <View style={styles.textContainer}>
-        <Text style={styles.title}>
-          Gain total <Text style={styles.highlight}>control</Text> {'\n'}of your money.
-        </Text>
-        <Text style={styles.subtitle}>
+        <ThemedText style={[styles.title, { color: c.text }]}>
+          Gain total <ThemedText style={[styles.highlight, { color: c.primary }]}>control</ThemedText> {'\n'}of your
+          money.
+        </ThemedText>
+        <ThemedText style={[styles.subtitle, { color: c.muted }]}>
           Become your own money manager and make every cent count with our editorial financial tools.
-        </Text>
+        </ThemedText>
       </View>
     </View>
   );
@@ -52,7 +54,6 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: '#F3E8FF', // Light purple
     justifyContent: 'flex-end',
     alignItems: 'center',
     position: 'relative',
@@ -65,7 +66,6 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 16,
-    backgroundColor: '#D8B4FE', // Lighter purple for inactive bars
     borderRadius: 4,
   },
   point: {
@@ -75,30 +75,25 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: PRIMARY,
     borderWidth: 2,
-    borderColor: '#fff',
   },
   textContainer: {
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   title: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 30,
-    color: '#1F2937',
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 38,
   },
   highlight: {
-    color: PRIMARY,
     fontStyle: 'italic',
   },
   subtitle: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 15,
-    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 0,

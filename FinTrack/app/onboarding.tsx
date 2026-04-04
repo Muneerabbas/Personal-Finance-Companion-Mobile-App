@@ -1,14 +1,18 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, FlatList, Pressable, Platform, StatusBar as RNStatusBar } from 'react-native';
+import { View, StyleSheet, Dimensions, FlatList, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { AntDesign, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Slide1 } from '@/components/onboarding/Slide1';
 import { Slide2 } from '@/components/onboarding/Slide2';
 import { Slide3 } from '@/components/onboarding/Slide3';
 import { Slide4 } from '@/components/onboarding/Slide4';
+import { ThemedText } from '@/components/themed-text';
+import { getOnboardingColors } from '@/constants/onboarding-theme';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const SLIDES = [
   { id: '1', Component: Slide1 },
@@ -17,12 +21,13 @@ const SLIDES = [
   { id: '4', Component: Slide4 },
 ];
 
-export const PRIMARY = '#8B5CF6';
-
 export default function Onboarding() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const router = useRouter();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+  const c = getOnboardingColors(colorScheme);
 
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
@@ -36,7 +41,7 @@ export default function Onboarding() {
     router.replace('/(tabs)');
   };
 
-  const handleScroll = (event: any) => {
+  const handleScroll = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
     const slideOffset = event.nativeEvent.contentOffset.x;
     const currentActive = Math.round(slideOffset / width);
     if (currentIndex !== currentActive && currentActive >= 0 && currentActive < SLIDES.length) {
@@ -45,22 +50,20 @@ export default function Onboarding() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* Header */}
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: c.background }]}>
+      <View style={[styles.container, { backgroundColor: c.background }]}>
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <View style={styles.iconBox}>
+            <View style={[styles.iconBox, { backgroundColor: theme.primary }]}>
               <Ionicons name="wallet" size={16} color="#fff" />
             </View>
-            <Text style={styles.logoText}>FinTrack</Text>
+            <ThemedText style={[styles.logoText, { color: theme.text }]}>FinTrack</ThemedText>
           </View>
           <Pressable onPress={handleSkip}>
-            <Text style={styles.skipText}>Skip</Text>
+            <ThemedText style={[styles.skipText, { color: theme.primary }]}>Skip</ThemedText>
           </Pressable>
         </View>
 
-        {/* Carousel */}
         <FlatList
           ref={flatListRef}
           data={SLIDES}
@@ -74,7 +77,6 @@ export default function Onboarding() {
           renderItem={({ item }) => <item.Component />}
         />
 
-        {/* Footer */}
         {currentIndex < 3 ? (
           <View style={styles.footer}>
             <View style={styles.pagination}>
@@ -83,16 +85,17 @@ export default function Onboarding() {
                   key={index}
                   style={[
                     styles.dot,
-                    currentIndex === index && styles.activeDot,
+                    { backgroundColor: c.dotInactive },
+                    currentIndex === index && [styles.activeDot, { backgroundColor: theme.primary }],
                   ]}
                 />
               ))}
             </View>
 
-            <Pressable style={styles.button} onPress={handleNext}>
-              <Text style={styles.buttonText}>
+            <Pressable style={[styles.button, { backgroundColor: theme.primary }]} onPress={handleNext}>
+              <ThemedText style={styles.buttonText}>
                 {currentIndex === 0 ? 'Get Started' : 'Continue'}
-              </Text>
+              </ThemedText>
               {(currentIndex === 0 || currentIndex === 2) && (
                 <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
               )}
@@ -107,11 +110,9 @@ export default function Onboarding() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
@@ -127,7 +128,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconBox: {
-    backgroundColor: PRIMARY,
     width: 24,
     height: 24,
     borderRadius: 6,
@@ -135,14 +135,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoText: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 16,
-    color: '#111827',
   },
   skipText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Poppins_500Medium',
     fontSize: 14,
-    color: PRIMARY,
   },
   footer: {
     paddingHorizontal: 24,
@@ -159,16 +157,13 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#D1D5DB', // Gray-300
   },
   activeDot: {
     width: 24,
     height: 6,
     borderRadius: 3,
-    backgroundColor: PRIMARY, // Purple
   },
   button: {
-    backgroundColor: PRIMARY,
     height: 56,
     borderRadius: 28,
     flexDirection: 'row',
@@ -177,7 +172,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
   },
   buttonIcon: {

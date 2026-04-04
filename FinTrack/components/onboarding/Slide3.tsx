@@ -1,35 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import { PRIMARY } from '@/app/onboarding';
+import { View, StyleSheet, Dimensions } from 'react-native';
+import { ThemedText } from '@/components/themed-text';
+import { getOnboardingColors } from '@/constants/onboarding-theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const { width } = Dimensions.get('window');
 
 export function Slide3() {
+  const scheme = useColorScheme() ?? 'light';
+  const c = getOnboardingColors(scheme);
+
   return (
-    <View style={styles.container}>
-      {/* Illustration Area */}
+    <View style={[styles.container, { backgroundColor: c.background }]}>
       <View style={styles.illustrationContainer}>
-        <Text style={styles.monthlySpendLabel}>MONTHLY SPEND</Text>
-        <Text style={styles.spendAmount}>$4,250</Text>
-        
+        <ThemedText style={[styles.monthlySpendLabel, { color: c.muted }]}>MONTHLY SPEND</ThemedText>
+        <ThemedText style={[styles.spendAmount, { color: c.text }]}>$4,250</ThemedText>
+
         <View style={styles.chartContainer}>
-          <View style={[styles.bar, { height: 30 }]} />
-          <View style={[styles.bar, { height: 50 }]} />
-          <View style={[styles.bar, { height: 40 }]} />
-          <View style={[styles.activeBar, { height: 80 }]} />
-          <View style={[styles.bar, { height: 60 }]} />
-          <View style={[styles.bar, { height: 30 }]} />
+          <View style={[styles.bar, { height: 30, backgroundColor: c.primaryTint }]} />
+          <View style={[styles.bar, { height: 50, backgroundColor: c.primaryTint }]} />
+          <View style={[styles.bar, { height: 40, backgroundColor: c.primaryTint }]} />
+          <View style={[styles.activeBar, { height: 80, backgroundColor: c.primary }]} />
+          <View style={[styles.bar, { height: 60, backgroundColor: c.primaryTint }]} />
+          <View style={[styles.bar, { height: 30, backgroundColor: c.primaryTint }]} />
         </View>
       </View>
 
-      {/* Text Content */}
       <View style={styles.textContainer}>
-        <Text style={styles.title}>
-          Know where your money goes.
-        </Text>
-        <Text style={styles.subtitle}>
+        <ThemedText style={[styles.title, { color: c.text }]}>Know where your money goes.</ThemedText>
+        <ThemedText style={[styles.subtitle, { color: c.muted }]}>
           Track your transaction easily, with categories and financial report.
-        </Text>
+        </ThemedText>
       </View>
     </View>
   );
@@ -50,16 +51,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   monthlySpendLabel: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 10,
-    color: '#9CA3AF',
     letterSpacing: 1.5,
     marginBottom: 8,
   },
   spendAmount: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 32,
-    color: '#1F2937',
     marginBottom: 32,
   },
   chartContainer: {
@@ -69,7 +68,6 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 14,
-    backgroundColor: '#F3E8FF', // Very light purple
     borderTopLeftRadius: 7,
     borderTopRightRadius: 7,
     borderBottomLeftRadius: 7,
@@ -77,7 +75,6 @@ const styles = StyleSheet.create({
   },
   activeBar: {
     width: 14,
-    backgroundColor: PRIMARY,
     borderTopLeftRadius: 7,
     borderTopRightRadius: 7,
     borderBottomLeftRadius: 7,
@@ -88,17 +85,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   title: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 30,
-    color: '#1F2937',
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 38,
   },
   subtitle: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 15,
-    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 0,
