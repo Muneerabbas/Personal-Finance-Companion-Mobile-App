@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { Fonts } from '@/constants/theme';
 
@@ -8,46 +8,47 @@ const AMOUNT_LINE = 56;
 export const amountEntryStyles = StyleSheet.create({
   amountRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     minHeight: 64,
-    gap: 6,
+    gap: 4,
   },
   symbolWrap: {
     height: AMOUNT_LINE,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
   },
   symbol: {
     color: '#FFFFFF',
     fontSize: AMOUNT_SIZE,
     lineHeight: AMOUNT_LINE,
     fontFamily: Fonts.bold,
-    includeFontPadding: false,
     textAlign: 'right',
   },
-  /** Centers the fixed-height line so iOS TextInput padding doesn’t sit higher than the symbol. */
   inputOuter: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     minHeight: 64,
+    position: 'relative',
+  },
+  amountPlaceholder: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: AMOUNT_SIZE,
+    lineHeight: AMOUNT_LINE,
+    fontFamily: Fonts.bold,
   },
   amountInput: {
-    height: AMOUNT_LINE,
     width: '100%',
+    height: AMOUNT_LINE,
+    minWidth: 80,
     color: '#FFFFFF',
     fontSize: AMOUNT_SIZE,
     lineHeight: AMOUNT_LINE,
     fontFamily: Fonts.bold,
     padding: 0,
     margin: 0,
-    minWidth: 80,
-    includeFontPadding: false,
-    ...Platform.select({
-      android: {
-        textAlignVertical: 'center',
-        paddingVertical: 0,
-      },
-      default: {},
-    }),
+    textAlignVertical: 'bottom',
   },
 });

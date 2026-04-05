@@ -201,17 +201,18 @@ export default function TabLayout() {
             ),
           }}
         />
-        <Tabs.Screen
-          name="transaction"
+         <Tabs.Screen
+          name="budget"
           options={{
-            title: 'Transaction',
+            title: 'Insights',
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabIcon focused={focused}>
-                <TransactionTabIcon color={String(color)} size={29} />
+                <BudgetTabIcon color={String(color)} size={29} />
               </AnimatedTabIcon>
             ),
           }}
         />
+
         <Tabs.Screen
           name="add"
           options={{
@@ -230,24 +231,25 @@ export default function TabLayout() {
             tabBarLabel: () => null,
           }}
         />
-        <Tabs.Screen
-          name="budget"
-          options={{
-            title: 'Insights',
-            tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon focused={focused}>
-                <BudgetTabIcon color={String(color)} size={29} />
-              </AnimatedTabIcon>
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
+       
+       <Tabs.Screen
+          name="challenges"
           options={{
             title: 'Challenges',
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabIcon focused={focused}>
                 <ProfileTabIcon color={String(color)} size={29} />
+              </AnimatedTabIcon>
+            ),
+          }}
+        />
+            <Tabs.Screen
+          name="transaction"
+          options={{
+            title: 'Transaction',
+            tabBarIcon: ({ color, focused }) => (
+              <AnimatedTabIcon focused={focused}>
+                <TransactionTabIcon color={String(color)} size={29} />
               </AnimatedTabIcon>
             ),
           }}

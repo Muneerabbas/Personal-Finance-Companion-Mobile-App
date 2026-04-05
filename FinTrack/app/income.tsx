@@ -1,7 +1,17 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import CategoryDropdown from '@/components/ui/category-dropdown';
@@ -84,11 +94,15 @@ export default function IncomeScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#10432F' : '#11A86C' }]}>
       <View style={styles.headerArea}>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <MaterialCommunityIcons name="arrow-left" size={26} color="#FFFFFF" />
-          </Pressable>
-          <ThemedText style={styles.headerTitle}>Income</ThemedText>
-          <View style={styles.headerRightSpacer} />
+          <View style={styles.headerSide}>
+            <Pressable onPress={() => router.back()} hitSlop={12}>
+              <MaterialCommunityIcons name="arrow-left" size={26} color="#FFFFFF" />
+            </Pressable>
+          </View>
+          <ThemedText style={styles.headerTitle} numberOfLines={1}>
+            Income
+          </ThemedText>
+          <View style={styles.headerSide} />
         </View>
         <ThemedText style={styles.howMuch}>How much?</ThemedText>
         <View style={amountEntryStyles.amountRow}>
@@ -96,11 +110,14 @@ export default function IncomeScreen() {
             <Text style={amountEntryStyles.symbol}>{currencySymbol}</Text>
           </View>
           <View style={amountEntryStyles.inputOuter}>
+            {!amountText ? (
+              <Text pointerEvents="none" style={amountEntryStyles.amountPlaceholder}>
+                0
+              </Text>
+            ) : null}
             <TextInput
               value={amountText}
               onChangeText={setAmountText}
-              placeholder="0"
-              placeholderTextColor="rgba(255,255,255,0.45)"
               keyboardType="decimal-pad"
               underlineColorAndroid="transparent"
               style={amountEntryStyles.amountInput}
@@ -160,10 +177,16 @@ export default function IncomeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  headerArea: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
-  headerTitle: { color: '#FFFFFF', fontFamily: Fonts.semiBold, fontSize: 20 },
-  headerRightSpacer: { width: 26 },
+  headerArea: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 28 },
+  headerSide: { width: 40, justifyContent: 'center' },
+  headerTitle: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontFamily: Fonts.semiBold,
+    fontSize: 20,
+    textAlign: 'center',
+  },
   howMuch: { color: 'rgba(255,255,255,0.85)', fontSize: 18, marginBottom: 10, fontFamily: Fonts.sans },
   formSheet: {
     flex: 1,
@@ -179,6 +202,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontFamily: Fonts.sans,
     fontSize: 16,
+    ...Platform.select({
+      android: {
+        textAlignVertical: 'center',
+        includeFontPadding: false,
+      },
+      default: {},
+    }),
   },
   attachment: {
     height: 54,

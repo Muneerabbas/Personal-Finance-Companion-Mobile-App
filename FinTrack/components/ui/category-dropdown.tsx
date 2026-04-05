@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -174,6 +175,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontSize: 16,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+        textAlignVertical: 'center',
+      },
+      default: {},
+    }),
   },
   otherInput: {
     marginTop: 10,

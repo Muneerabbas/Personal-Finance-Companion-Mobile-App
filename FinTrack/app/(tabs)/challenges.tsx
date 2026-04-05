@@ -5,7 +5,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export default function ProfileScreen() {
+export default function ChallengesScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
@@ -13,10 +13,10 @@ export default function ProfileScreen() {
     <ThemedView style={styles.container}>
       <ThemedView style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <ThemedText type="title" style={styles.title}>
-          Profile
+          challenges
         </ThemedText>
         <ThemedText style={{ color: theme.muted }}>
-          Manage account settings, notifications, and preferences.
+          Track your progress and stay motivated.
         </ThemedText>
       </ThemedView>
     </ThemedView>
