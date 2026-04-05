@@ -3,39 +3,37 @@ import { StyleSheet, View } from 'react-native';
 
 import { CurrencyText } from '@/components/currency-text';
 import { ThemedText } from '@/components/themed-text';
+import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type CardProps = {
+type StatRowProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   amountUsd: number;
-  accentColor: string;
-  iconBackgroundColor: string;
+  iconBg: string;
+  iconColor: string;
 };
 
-function StatCard({ icon, label, amountUsd, accentColor, iconBackgroundColor }: CardProps) {
-  const isDark = (useColorScheme() ?? 'light') === 'dark';
+function StatRow({ icon, label, amountUsd, iconBg, iconColor }: StatRowProps) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
 
   return (
     <View
       style={[
         styles.card,
         {
-          backgroundColor: isDark ? '#1D2337' : '#FBFBFC',
-          borderColor: isDark ? '#2A3148' : '#F0F0F4',
+          backgroundColor: theme.card,
+          borderColor: theme.border,
         },
       ]}>
-      <View style={[styles.iconBox, { backgroundColor: iconBackgroundColor }]}>
-        <Ionicons name={icon} size={18} color={accentColor} />
+      <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={20} color={iconColor} />
       </View>
-      <View style={styles.copyWrap}>
-        <ThemedText style={[styles.label, { color: isDark ? '#8F97B3' : '#A0A5B8' }]}>{label}</ThemedText>
-        <CurrencyText
-          amountUsd={amountUsd}
-          style={[styles.amount, { color: isDark ? '#F5F7FF' : '#2A2F3C' }]}
-        />
+      <View style={styles.copy}>
+        <ThemedText style={[styles.label, { color: theme.muted }]}>{label}</ThemedText>
+        <CurrencyText amountUsd={amountUsd} style={[styles.amount, { color: theme.text }]} />
       </View>
-      <Ionicons name="chevron-forward" size={18} color={isDark ? '#6F7898' : '#C9CCE0'} />
     </View>
   );
 }
@@ -46,21 +44,29 @@ type IncomeExpenseCardProps = {
 };
 
 export default function IncomeExpenseCard({ incomeUsd, expensesUsd }: IncomeExpenseCardProps) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[colorScheme];
+
+  const incomeBg = isDark ? 'rgba(139,124,255,0.14)' : '#EDE9FE';
+  const expenseBg = isDark ? 'rgba(248,113,113,0.14)' : '#FEF2F2';
+  const expenseIcon = isDark ? '#F87171' : '#DC2626';
+
   return (
     <View style={styles.column}>
-      <StatCard
-        icon="wallet-outline"
+      <StatRow
+        icon="arrow-down"
         label="Income"
         amountUsd={incomeUsd}
-        accentColor="#2F7A52"
-        iconBackgroundColor="#E7F3EA"
+        iconBg={incomeBg}
+        iconColor={theme.primary}
       />
-      <StatCard
+      <StatRow
         icon="arrow-up"
         label="Expenses"
         amountUsd={expensesUsd}
-        accentColor="#C05A5A"
-        iconBackgroundColor="#F9EAEA"
+        iconBg={expenseBg}
+        iconColor={expenseIcon}
       />
     </View>
   );
@@ -71,32 +77,34 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingVertical: 18,
+    paddingVertical: 16,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
   },
   iconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  copyWrap: {
+  copy: {
     flex: 1,
   },
   label: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    marginBottom: 2,
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
   amount: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
-    lineHeight: 24,
+    fontFamily: Fonts.bold,
+    fontSize: 22,
+    lineHeight: 28,
   },
 });

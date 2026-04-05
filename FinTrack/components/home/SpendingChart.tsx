@@ -1,21 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  GestureResponderEvent,
-  LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import React, { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { CurrencyText } from '@/components/currency-text';
 import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
-type ChartPoint = {
+export type ChartPoint = {
   value: number;
   label: string;
   amountUsd: number;
@@ -23,185 +14,104 @@ type ChartPoint = {
 
 type SpendingChartProps = {
   data: ChartPoint[];
-  activePointIndex?: number;
-  headerAccessory?: React.ReactNode;
 };
 
-const CHART_HEIGHT = 210;
-const H_PAD = 10;
-const V_PAD_TOP = 22;
-const V_PAD_BOTTOM = 10;
-const STROKE_WIDTH = 3;
+const BAR_CHART_HEIGHT = 140;
+const DAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
+const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
-function clampIndex(index: number, length: number) {
-  if (length <= 0) return 0;
-  return Math.max(0, Math.min(index, length - 1));
-}
-
-function smoothLinePath(points: { x: number; y: number }[]): string {
-  if (points.length === 0) return '';
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = i === 0 ? points[0] : points[i - 1];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = i + 2 < points.length ? points[i + 2] : p2;
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+function labelToShortUpper(label: string, index: number): string {
+  const raw = label.trim();
+  const upper = raw.toUpperCase();
+  if (upper.length <= 3 && /^[A-Z]+$/.test(upper)) {
+    return upper;
   }
-  return d;
+  const match = DAY_LABELS.find((d) => upper.startsWith(d.slice(0, 2)));
+  if (match) return match;
+  return DAY_LABELS[index] ?? upper.slice(0, 3);
 }
 
-function SpendingChartInner({
-  data,
-  activePointIndex = data.length - 1,
-  headerAccessory,
-}: SpendingChartProps) {
+function SpendingChartInner({ data }: SpendingChartProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
-  const theme = Colors[colorScheme];
-  const { width: screenW } = useWindowDimensions();
-  const widthFallback = Math.max(screenW - 68, 220);
-  const [plotWidth, setPlotWidth] = useState(0);
-  const chartWidth = plotWidth > 0 ? plotWidth : widthFallback;
+  const mutedColor = useThemeColor({}, 'muted');
+  const primaryColor = useThemeColor({}, 'primary');
+  const cardBg = useThemeColor({}, 'card');
+  const borderColor = useThemeColor({}, 'border');
 
-  const onChartLayout = useCallback((e: LayoutChangeEvent) => {
-    const w = e.nativeEvent.layout.width;
-    setPlotWidth((prev) => (Math.abs(w - prev) > 0.5 ? w : prev));
-  }, []);
-
-  const [selectedIndex, setSelectedIndex] = useState(() =>
-    clampIndex(activePointIndex, data.length),
-  );
-
-  useEffect(() => {
-    setSelectedIndex(clampIndex(activePointIndex, data.length));
-  }, [activePointIndex, data]);
-
-  const innerW = chartWidth - H_PAD * 2;
-  const innerH = CHART_HEIGHT - V_PAD_TOP - V_PAD_BOTTOM;
-  const baseY = V_PAD_TOP + innerH;
-
-  const { linePath, fillPath, points } = useMemo(() => {
-    if (data.length === 0) {
-      return { linePath: '', fillPath: '', points: [] as { x: number; y: number }[] };
+  const series = useMemo(() => {
+    const sliced = data.slice(0, 7);
+    const out: ChartPoint[] = [...sliced];
+    while (out.length < 7) {
+      const i = out.length;
+      out.push({ value: 0, label: WEEKDAY_SHORT[i], amountUsd: 0 });
     }
-    const maxV = Math.max(...data.map((d) => d.value), 0) + 8;
-    const n = data.length;
-    const pts = data.map((item, i) => {
-      const x = H_PAD + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
-      const y = V_PAD_TOP + innerH * (1 - item.value / maxV);
-      return { x, y };
+    return out;
+  }, [data]);
+
+  const highlightIndex = useMemo(() => {
+    let best = 0;
+    for (let i = 1; i < series.length; i++) {
+      if (series[i].value > series[best].value) best = i;
+    }
+    return best;
+  }, [series]);
+
+  const bars = useMemo(() => {
+    const maxV = Math.max(...series.map((d) => d.value), 1);
+    return series.map((point, index) => {
+      const heightPct = Math.max(12, Math.round((point.value / maxV) * 100));
+      const isHighlight = index === highlightIndex;
+      return {
+        key: `${point.label}-${index}`,
+        heightPct,
+        isHighlight,
+        shortLabel: labelToShortUpper(point.label, index),
+      };
     });
-    const line = smoothLinePath(pts);
-    if (!line) {
-      return { linePath: '', fillPath: '', points: pts };
-    }
-    const last = pts[pts.length - 1];
-    const first = pts[0];
-    const fill = `${line} L ${last.x} ${baseY} L ${first.x} ${baseY} Z`;
-    return { linePath: line, fillPath: fill, points: pts };
-  }, [data, innerW, innerH, baseY]);
+  }, [series, highlightIndex]);
 
-  const safeIndex = clampIndex(selectedIndex, data.length);
-  const selectedItem = data[safeIndex];
-  const selPoint = points[safeIndex];
-
-  const handlePress = useCallback(
-    (e: GestureResponderEvent) => {
-      if (data.length <= 1) return;
-      const x = e.nativeEvent.locationX;
-      const rel = x - H_PAD;
-      const t = rel / innerW;
-      const idx = Math.round(Math.max(0, Math.min(1, t)) * (data.length - 1));
-      setSelectedIndex(idx);
-    },
-    [data.length, innerW],
-  );
-
-  const gradientId = React.useId().replace(/:/g, '');
-  const primary = theme.primary;
+  const inactiveBarColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)';
+  const chartWellBg = isDark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.04)';
 
   return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: isDark ? '#171B2B' : '#F7F7F8',
-          borderColor: isDark ? '#232A3F' : '#ECECF1',
-        },
-      ]}>
-      <ThemedText style={[styles.title, { color: isDark ? '#F5F7FF' : '#232836' }]}>Spending Trends</ThemedText>
-      <ThemedText style={[styles.subtitle, { color: isDark ? '#8D95B2' : '#7B8195' }]}>
-        Visualization of your editorial cashflow
-      </ThemedText>
-      {headerAccessory ? <View style={styles.filterWrap}>{headerAccessory}</View> : null}
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
+      <View style={styles.headerRow}>
+        <ThemedText style={styles.title}>Weekly Spending</ThemedText>
+        <ThemedText style={[styles.rangeCaps, { color: primaryColor }]}>Last 7 days</ThemedText>
+      </View>
 
-      {selectedItem ? (
+      <View style={[styles.chartWell, { backgroundColor: chartWellBg }]}>
         <View
-          style={[
-            styles.summary,
-            {
-              backgroundColor: isDark ? '#232A40' : '#FFFFFF',
-              borderColor: isDark ? '#343D59' : '#EEF0F6',
-            },
-          ]}>
-          <Text style={[styles.summaryDate, { color: isDark ? '#98A1BC' : '#9298AA' }]}>
-            {selectedItem.label}
-          </Text>
-          <CurrencyText
-            amountUsd={selectedItem.amountUsd}
-            style={[styles.summaryAmount, { color: primary }]}
-          />
-        </View>
-      ) : null}
-
-      <View
-        style={[
-          styles.chartWrap,
-          { backgroundColor: isDark ? '#1C2234' : '#F1F1F2' },
-        ]}>
-        <View style={styles.chartSurface} onLayout={onChartLayout}>
-          {linePath ? (
-            <Svg width={chartWidth} height={CHART_HEIGHT} viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT}`}>
-              <Defs>
-                <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={primary} stopOpacity={isDark ? 0.32 : 0.24} />
-                  <Stop offset="1" stopColor={primary} stopOpacity={0.02} />
-                </LinearGradient>
-              </Defs>
-              <Path d={fillPath} fill={`url(#${gradientId})`} />
-              <Path
-                d={linePath}
-                fill="none"
-                stroke={primary}
-                strokeWidth={STROKE_WIDTH}
-                strokeLinecap="round"
-                strokeLinejoin="round"
+          style={[styles.barsRow, { height: BAR_CHART_HEIGHT }]}
+          accessible
+          accessibilityLabel="Spending by day for the last seven days">
+          {bars.map((bar) => (
+            <View key={bar.key} style={styles.barTrack}>
+              <View
+                style={[
+                  styles.barFill,
+                  {
+                    height: `${bar.heightPct}%`,
+                    backgroundColor: bar.isHighlight ? primaryColor : inactiveBarColor,
+                  },
+                ]}
               />
-              {selPoint ? (
-                <Circle
-                  cx={selPoint.x}
-                  cy={selPoint.y}
-                  r={6}
-                  fill="#FFFFFF"
-                  stroke={primary}
-                  strokeWidth={3}
-                />
-              ) : null}
-            </Svg>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Spending chart, tap to select a day"
-            onPress={handlePress}
-            disabled={data.length === 0}
-            style={StyleSheet.absoluteFill}
-          />
+            </View>
+          ))}
+        </View>
+        <View style={styles.labelsRow}>
+          {bars.map((bar) => (
+            <View key={`${bar.key}-lab`} style={styles.labelCell}>
+              <ThemedText
+                style={[
+                  styles.axisLabel,
+                  { color: bar.isHighlight ? primaryColor : mutedColor },
+                ]}>
+                {bar.shortLabel}
+              </ThemedText>
+            </View>
+          ))}
         </View>
       </View>
     </View>
@@ -212,51 +122,66 @@ export default React.memo(SpendingChartInner);
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 1,
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 18,
   },
-  title: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
-    marginBottom: 14,
-  },
-  filterWrap: {
-    marginBottom: 14,
-  },
-  summary: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingVertical: 10,
+    marginBottom: 18,
+  },
+  title: {
+    fontFamily: Fonts.bold,
+    fontSize: 18,
+    letterSpacing: -0.2,
+  },
+  rangeCaps: {
+    fontFamily: Fonts.bold,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  chartWell: {
+    borderRadius: 20,
     paddingHorizontal: 14,
+    paddingTop: 20,
+    paddingBottom: 14,
+  },
+  barsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 12,
   },
-  summaryDate: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 12,
+  barTrack: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
   },
-  summaryAmount: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 15,
-  },
-  chartWrap: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    paddingTop: 12,
-    paddingHorizontal: 0,
-    paddingBottom: 10,
-  },
-  chartSurface: {
-    height: CHART_HEIGHT,
+  barFill: {
     width: '100%',
-    position: 'relative',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    minHeight: 4,
+  },
+  labelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  labelCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  axisLabel: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
 });

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CurrencyText } from '@/components/currency-text';
 import { type Transaction } from '@/components/home/TransactionItem';
+import AppHeader from '@/components/layout/AppHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
 import { useTransactions } from '@/context/transactions-context';
@@ -161,6 +162,7 @@ export default function TransactionScreen() {
         style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
+        <AppHeader />
         <View
           style={[
             styles.searchWrap,
@@ -228,9 +230,6 @@ export default function TransactionScreen() {
               <View style={styles.sectionHeader}>
                 <ThemedText style={[styles.sectionTitle, { color: isDark ? '#F3F6FF' : theme.text }]}>
                   {sectionIndex === 0 ? 'Recent Activity' : section.title}
-                </ThemedText>
-                <ThemedText style={[styles.sectionSubtitle, { color: isDark ? '#C5CBD9' : theme.muted }]}>
-                  {section.subtitle.toUpperCase()}
                 </ThemedText>
               </View>
 
@@ -364,6 +363,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 120,
+    gap: 16,
   },
   searchWrap: {
     height: 60,
@@ -404,9 +404,6 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 14,
     paddingHorizontal: 4,
   },
@@ -414,11 +411,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     fontSize: 18,
     lineHeight: 24,
-  },
-  sectionSubtitle: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 11,
-    letterSpacing: 1,
   },
   card: {
     borderRadius: 18,

@@ -12,18 +12,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { useCurrency } from '@/context/currency-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type Row = { code: string; name: string };
 
-export default function CurrencyPickerButton() {
+type CurrencyPickerButtonProps = {
+  variant?: 'default' | 'header';
+};
+
+export default function CurrencyPickerButton({ variant = 'default' }: CurrencyPickerButtonProps) {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme];
-  const { selectedCode, setSelectedCode, currencyNames, loading } = useCurrency();
+  const { selectedCode, setSelectedCode, currencyNames, loading, currencySymbol } = useCurrency();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -46,15 +50,38 @@ export default function CurrencyPickerButton() {
   return (
     <>
       <TouchableOpacity
-        style={[styles.trigger, { backgroundColor: isDark ? '#20263B' : '#F7F8FC' }]}
+        style={
+          variant === 'header'
+            ? [
+                styles.triggerHeaderPill,
+                {
+                  backgroundColor: isDark ? '#1E2436' : theme.secondary,
+                  borderColor: theme.border,
+                },
+              ]
+            : [styles.trigger, { backgroundColor: isDark ? '#20263B' : '#F7F8FC' }]
+        }
         onPress={() => setOpen(true)}
         activeOpacity={0.8}
         accessibilityRole="button"
-        accessibilityLabel="Choose display currency">
-        <ThemedText style={[styles.triggerText, { color: isDark ? '#EEF2FF' : '#2A3147' }]}>
-          {label}
-        </ThemedText>
-        <Ionicons name="chevron-down" size={16} color={theme.primary} />
+        accessibilityLabel="Currency"
+        accessibilityHint="Opens a list to change display currency">
+        {variant === 'header' ? (
+          <>
+            <ThemedText style={[styles.pillSymbol, { color: theme.primary }]}>
+              {loading ? '…' : currencySymbol}
+            </ThemedText>
+            <ThemedText style={[styles.pillCode, { color: theme.text }]}>{label}</ThemedText>
+            <Ionicons name="chevron-down" size={18} color={theme.muted} />
+          </>
+        ) : (
+          <>
+            <ThemedText style={[styles.triggerText, { color: isDark ? '#EEF2FF' : '#2A3147' }]}>
+              {label}
+            </ThemedText>
+            <Ionicons name="chevron-down" size={16} color={theme.primary} />
+          </>
+        )}
       </TouchableOpacity>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
@@ -157,6 +184,27 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     minWidth: 72,
     justifyContent: 'center',
+  },
+  triggerHeaderPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    minHeight: 44,
+  },
+  pillSymbol: {
+    fontFamily: Fonts.bold,
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  pillCode: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.4,
   },
   triggerText: {
     fontFamily: 'Poppins_600SemiBold',
