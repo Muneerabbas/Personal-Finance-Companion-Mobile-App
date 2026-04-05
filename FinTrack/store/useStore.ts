@@ -17,7 +17,7 @@ interface AppState {
   fetchUser: () => Promise<void>;
   fetchTransactions: () => Promise<void>;
   addTransaction: (payload: any) => Promise<void>;
-  /** Records a goal-saving expense and increases goal.saved_amount when balance allows */
+  /** Records a goal allocation (category goal_saving) and increases goal.saved_amount when balance allows */
   allocateToGoal: (goalId: string, amountUsd: number) => Promise<void>;
   fetchGoals: () => Promise<void>;
   addGoal: (payload: any) => Promise<void>;
@@ -138,6 +138,7 @@ export const useStore = create<AppState>((set, get) => ({
       set((state) => ({ goals: [...state.goals, newGoal] }));
     } catch (error) {
       console.error(error);
+      throw error;
     } finally {
       set({ loading: false });
     }

@@ -1,4 +1,8 @@
-import { OTHER_CATEGORY_LABEL, visualForCategory } from '@/constants/transaction-category-styles';
+import {
+  GOAL_SAVING_CATEGORY,
+  OTHER_CATEGORY_LABEL,
+  visualForCategory,
+} from '@/constants/transaction-category-styles';
 import { type Transaction } from '@/components/home/TransactionItem';
 
 export function generateId() {
@@ -54,7 +58,13 @@ export function mapPayloadToUITransaction(payload: TransactionPayload): Transact
     : payload.category;
 
   const v = visualForCategory(resolvedCategory, payload.type === 'expense' ? 'expense' : 'income', isOther);
-  const paymentMethod = payload.wallet.trim() || (payload.type === 'income' ? 'Income' : 'Expense');
+  const paymentMethod =
+    payload.wallet.trim() ||
+    (resolvedCategory === GOAL_SAVING_CATEGORY
+      ? 'Goal'
+      : payload.type === 'income'
+        ? 'Income'
+        : 'Expense');
   
   return {
     id: payload.id,

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CurrencyText } from '@/components/currency-text';
 import { ThemedText } from '@/components/themed-text';
+import { getCategoryDisplayLabel, isGoalAllocationCategory } from '@/constants/transaction-category-styles';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export type Transaction = {
@@ -28,20 +29,25 @@ type TransactionItemProps = {
 
 export default function TransactionItem({ item, onPress }: TransactionItemProps) {
   const isExpense = item.amount < 0;
+  const isGoalAllocation = isGoalAllocationCategory(item.category);
   const isDark = (useColorScheme() ?? 'light') === 'dark';
-  const metaLine = `${item.category} • ${item.timeLabel}`;
+  const metaLine = `${getCategoryDisplayLabel(item.category)} • ${item.timeLabel}`;
   const isOther = item.isOtherCategory === true;
   const iconBg = isOther ? (isDark ? '#2A3045' : '#E8E8ED') : item.iconBackground;
   const iconCol = isOther ? (isDark ? '#9CA3AF' : '#6B7280') : item.iconColor;
   const iconName = isOther ? 'pricetag-outline' : item.icon;
 
-  const amountColor = isExpense
+  const amountColor = isGoalAllocation
     ? isDark
-      ? '#F87171'
-      : '#DC2626'
-    : isDark
-      ? '#4ADE80'
-      : '#15803D';
+      ? '#A78BFA'
+      : item.iconColor || '#6D28D9'
+    : isExpense
+      ? isDark
+        ? '#F87171'
+        : '#DC2626'
+      : isDark
+        ? '#4ADE80'
+        : '#15803D';
 
   return (
     <Pressable
@@ -84,7 +90,7 @@ export default function TransactionItem({ item, onPress }: TransactionItemProps)
         <Text
           style={[styles.paymentMethod, { color: isDark ? '#6B7280' : '#9CA3AF' }]}
           numberOfLines={1}>
-          {(item.paymentMethod || '').toUpperCase()}
+          {(isGoalAllocation ? 'Towards goal' : item.paymentMethod || '').toUpperCase()}
         </Text>
       </View>
     </Pressable>

@@ -2,8 +2,20 @@ import type { Transaction } from '@/components/home/TransactionItem';
 
 export const OTHER_CATEGORY_LABEL = 'Other';
 
-/** Expense category for allocations moved from balance into a savings goal */
+/** Internal category key for allocations moved from balance into a savings goal (stored in DB) */
 export const GOAL_SAVING_CATEGORY = 'goal_saving';
+
+/** User-facing label — not a discretionary expense */
+export const GOAL_ALLOCATION_DISPLAY_LABEL = 'Towards goal';
+
+export function isGoalAllocationCategory(category: string): boolean {
+  return category === GOAL_SAVING_CATEGORY;
+}
+
+export function getCategoryDisplayLabel(category: string): string {
+  if (isGoalAllocationCategory(category)) return GOAL_ALLOCATION_DISPLAY_LABEL;
+  return category;
+}
 
 type Visual = Pick<Transaction, 'icon' | 'iconBackground' | 'iconColor'>;
 

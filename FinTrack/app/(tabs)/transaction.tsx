@@ -10,6 +10,11 @@ import AppHeader from '@/components/layout/AppHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  getCategoryDisplayLabel,
+  GOAL_ALLOCATION_DISPLAY_LABEL,
+  isGoalAllocationCategory,
+} from '@/constants/transaction-category-styles';
 import { useStore } from '@/store/useStore';
 
 type TransactionFilter = 'all' | 'income' | 'expense';
@@ -90,13 +95,20 @@ function formatOlderSectionTitle(date: Date) {
 
 function matchesFilter(item: Transaction, filter: TransactionFilter) {
   if (filter === 'income') return item.amount > 0;
-  if (filter === 'expense') return item.amount < 0;
+  if (filter === 'expense') return item.amount < 0 && !isGoalAllocationCategory(item.category);
   return true;
 }
 
 function matchesSearch(item: Transaction, query: string) {
   if (!query) return true;
-  const haystack = [item.title, item.category, item.paymentMethod, Math.abs(item.amount).toFixed(2)]
+  const haystack = [
+    item.title,
+    item.category,
+    getCategoryDisplayLabel(item.category),
+    GOAL_ALLOCATION_DISPLAY_LABEL,
+    item.paymentMethod,
+    Math.abs(item.amount).toFixed(2),
+  ]
     .join(' ')
     .toLowerCase();
 
@@ -253,13 +265,18 @@ export default function TransactionScreen() {
                 ]}>
                 {section.data.map((item, index) => {
                   const isExpense = item.amount < 0;
-                  const accentColor = isExpense
+                  const isGoalAllocation = isGoalAllocationCategory(item.category);
+                  const accentColor = isGoalAllocation
                     ? isDark
-                      ? '#F3AAA1'
-                      : '#DC6B5F'
-                    : isDark
-                      ? '#86E2B8'
-                      : '#1FA971';
+                      ? '#A78BFA'
+                      : item.iconColor || '#6D28D9'
+                    : isExpense
+                      ? isDark
+                        ? '#F3AAA1'
+                        : '#DC6B5F'
+                      : isDark
+                        ? '#86E2B8'
+                        : '#1FA971';
                   return (
                     <Pressable key={item.id} onPress={() => handleTxPress(item)} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
                       <View style={styles.row}>
@@ -296,7 +313,7 @@ export default function TransactionScreen() {
                           <ThemedText
                             style={[styles.metaLine, { color: isDark ? '#B7BECE' : theme.muted }]}
                             numberOfLines={1}>
-                            {`${item.timeLabel} • ${item.category}`}
+                            {`${item.timeLabel} • ${getCategoryDisplayLabel(item.category)}`}
                           </ThemedText>
                         </View>
 
@@ -319,7 +336,7 @@ export default function TransactionScreen() {
                             />
                             <ThemedText
                               style={[styles.typeLabel, { color: isDark ? '#B7BECE' : theme.muted }]}>
-                              {isExpense ? 'EXPENSE' : 'INCOME'}
+                              {isGoalAllocation ? 'GOAL' : isExpense ? 'EXPENSE' : 'INCOME'}
                             </ThemedText>
                           </View>
                         </View>

@@ -5,6 +5,11 @@ import { ThemedText } from '@/components/themed-text';
 import { CurrencyText } from '@/components/currency-text';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  getCategoryDisplayLabel,
+  GOAL_ALLOCATION_DISPLAY_LABEL,
+  isGoalAllocationCategory,
+} from '@/constants/transaction-category-styles';
 import type { Transaction } from './TransactionItem';
 
 type TransactionDetailModalProps = {
@@ -43,29 +48,62 @@ export default function TransactionDetailModal({ visible, transaction, onClose }
   if (!transaction) return null;
 
   const isExpense = transaction.amount < 0;
+  const isGoalAllocation = isGoalAllocationCategory(transaction.category);
   const isOther = transaction.isOtherCategory === true;
   const iconBg = isOther ? (isDark ? '#2A3045' : '#E8E8ED') : transaction.iconBackground;
   const iconCol = isOther ? (isDark ? '#9CA3AF' : '#6B7280') : transaction.iconColor;
   const iconName = isOther ? 'pricetag-outline' : transaction.icon;
 
-  const amountColor = isExpense
-    ? isDark ? '#F87171' : '#DC2626'
-    : isDark ? '#4ADE80' : '#15803D';
+  const amountColor = isGoalAllocation
+    ? isDark
+      ? '#A78BFA'
+      : transaction.iconColor || '#6D28D9'
+    : isExpense
+      ? isDark
+        ? '#F87171'
+        : '#DC2626'
+      : isDark
+        ? '#4ADE80'
+        : '#15803D';
 
-  const typeBadgeColor = isExpense
-    ? isDark ? '#3B1C1C' : '#FEE2E2'
-    : isDark ? '#1C3B2A' : '#DCFCE7';
+  const typeBadgeColor = isGoalAllocation
+    ? isDark
+      ? '#2E1065'
+      : '#EDE9FE'
+    : isExpense
+      ? isDark
+        ? '#3B1C1C'
+        : '#FEE2E2'
+      : isDark
+        ? '#1C3B2A'
+        : '#DCFCE7';
 
-  const typeBadgeTextColor = isExpense
-    ? isDark ? '#F87171' : '#DC2626'
-    : isDark ? '#4ADE80' : '#15803D';
+  const typeBadgeTextColor = isGoalAllocation
+    ? isDark
+      ? '#C4B5FD'
+      : '#5B21B6'
+    : isExpense
+      ? isDark
+        ? '#F87171'
+        : '#DC2626'
+      : isDark
+        ? '#4ADE80'
+        : '#15803D';
 
   const rows: { label: string; value: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { label: 'Category', value: transaction.category, icon: 'folder-outline' },
-    { label: 'Payment Method', value: (transaction.paymentMethod || '—').toUpperCase(), icon: 'card-outline' },
+    { label: 'Category', value: getCategoryDisplayLabel(transaction.category), icon: 'folder-outline' },
+    {
+      label: 'Payment Method',
+      value: (isGoalAllocation ? 'Goal' : transaction.paymentMethod || '—').toUpperCase(),
+      icon: 'card-outline',
+    },
     { label: 'Date', value: formatFullDate(transaction.date), icon: 'calendar-outline' },
     { label: 'Time', value: formatFullTime(transaction.date), icon: 'time-outline' },
-    { label: 'Type', value: isExpense ? 'Expense' : 'Income', icon: isExpense ? 'trending-down' : 'trending-up' },
+    {
+      label: 'Type',
+      value: isGoalAllocation ? GOAL_ALLOCATION_DISPLAY_LABEL : isExpense ? 'Expense' : 'Income',
+      icon: isGoalAllocation ? 'flag' : isExpense ? 'trending-down' : 'trending-up',
+    },
   ];
 
   return (
@@ -108,12 +146,12 @@ export default function TransactionDetailModal({ visible, transaction, onClose }
               {/* Type badge */}
               <View style={[styles.typeBadge, { backgroundColor: typeBadgeColor }]}>
                 <Ionicons
-                  name={isExpense ? 'arrow-down-circle' : 'arrow-up-circle'}
+                  name={isGoalAllocation ? 'flag' : isExpense ? 'arrow-down-circle' : 'arrow-up-circle'}
                   size={14}
                   color={typeBadgeTextColor}
                 />
                 <ThemedText style={[styles.typeBadgeText, { color: typeBadgeTextColor }]}>
-                  {isExpense ? 'Expense' : 'Income'}
+                  {isGoalAllocation ? GOAL_ALLOCATION_DISPLAY_LABEL : isExpense ? 'Expense' : 'Income'}
                 </ThemedText>
               </View>
             </View>

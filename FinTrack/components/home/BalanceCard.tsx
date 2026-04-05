@@ -34,7 +34,7 @@ export default function BalanceCard({ amountUsd }: BalanceCardProps) {
         },
       ]}>
       <View style={styles.topRow}>
-        <ThemedText style={[styles.netLabel, { color: theme.muted }]}>Net balance</ThemedText>
+        <ThemedText style={[styles.netLabel, { color: theme.muted }]}>Total net balance</ThemedText>
         <View style={[styles.walletBadge, { backgroundColor: isDark ? 'rgba(139,124,255,0.12)' : '#F3E8FF' }]}>
           <Ionicons name="wallet-outline" size={22} color={theme.primary} />
         </View>

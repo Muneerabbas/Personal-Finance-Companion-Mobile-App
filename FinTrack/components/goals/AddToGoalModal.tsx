@@ -104,7 +104,7 @@ export default function AddToGoalModal({
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={[styles.sheet, { backgroundColor: card, borderColor: border }]}>
               <View style={[styles.handle, { backgroundColor: border }]} />
-              <ThemedText style={[styles.title, { color: text }]}>Add to goal</ThemedText>
+              <ThemedText style={[styles.title, { color: text }]}>Add Funds</ThemedText>
               <ThemedText style={[styles.subtitle, { color: muted }]} numberOfLines={2}>
                 {goalTitle}
               </ThemedText>

@@ -14,6 +14,7 @@ import type { ChartPoint } from '@/components/home/SpendingChart';
 import TransactionList from '@/components/home/TransactionList';
 import AppHeader from '@/components/layout/AppHeader';
 import { Colors } from '@/constants/theme';
+import { GOAL_SAVING_CATEGORY } from '@/constants/transaction-category-styles';
 import { useStore } from '@/store/useStore';
 import { HOME_RECENT_TRANSACTION_COUNT } from '@/data/dashboard-mock';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -82,6 +83,7 @@ export default function HomeScreen() {
   const fetchTransactions = useStore(state => state.fetchTransactions);
   const fetchBudget = useStore(state => state.fetchBudget);
   const monthlyBudget = useStore(state => state.monthlyBudget);
+  const getNetBalance = useStore(state => state.getNetBalance);
 
   /** ON: income/expenses for this week through today. OFF: one day at a time (defaults to today). */
   const [toDateEnabled, setToDateEnabled] = useState(true);
@@ -120,7 +122,7 @@ export default function HomeScreen() {
     return weekDays.map((day) => {
       const dayTxs = txByDate[day.dateKey] || [];
       const totalSpent = dayTxs
-        .filter(tx => tx.amount < 0)
+        .filter((tx) => tx.amount < 0 && tx.category !== GOAL_SAVING_CATEGORY)
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
       return {
         value: totalSpent,
@@ -218,11 +220,11 @@ export default function HomeScreen() {
 
   const totalExpenses = useMemo(() => {
     return filteredTransactions
-      .filter(tx => tx.amount < 0)
+      .filter((tx) => tx.amount < 0 && tx.category !== GOAL_SAVING_CATEGORY)
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   }, [filteredTransactions]);
 
-  const netBalance = totalIncome - totalExpenses;
+  const netBalanceAllTime = getNetBalance();
   const budget = monthlyBudget || 2500;
   const remainingBudget = Math.max(0, budget - totalExpenses);
 
@@ -244,7 +246,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}>
         <AppHeader />
         
-        <BalanceCard amountUsd={netBalance} />
+        <BalanceCard amountUsd={netBalanceAllTime} />
         
         <IncomeExpenseCard
           incomeUsd={totalIncome}
