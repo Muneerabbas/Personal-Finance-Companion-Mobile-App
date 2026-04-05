@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { getTransactions, addTransaction as apiAddTransaction } from '@/api/transactions';
 import { getGoals, addGoal as apiAddGoal, patchGoalSavedAmount } from '@/api/goals';
 import { getBudget, setBudget as apiSetBudget } from '@/api/budget';
-import { GOAL_SAVING_CATEGORY } from '@/constants/transaction-category-styles';
+import { GOAL_SAVING_CATEGORY, isSpendingExpense } from '@/constants/transaction-category-styles';
 import { createTransactionPayload } from '@/lib/transaction-helper';
 import { supabase } from '@/lib/supabase';
 
@@ -23,6 +23,8 @@ interface AppState {
   addGoal: (payload: any) => Promise<void>;
   fetchBudget: () => Promise<void>;
   setBudget: (limit: number) => Promise<void>;
+  /** Reload transactions, goals, and budget from the API (e.g. pull-to-refresh). */
+  refreshAllData: () => Promise<void>;
   
   // Derived state getters
   getTotalIncome: () => number;
@@ -40,16 +42,17 @@ export const useStore = create<AppState>((set, get) => ({
   user: null,
 
   fetchUser: async () => {
+    await supabase.auth.refreshSession().catch(() => {});
     const { data: { session } } = await supabase.auth.getSession();
-    set({ user: session?.user || null });
-
-    supabase.auth.onAuthStateChange((_event, session) => {
-      set({ user: session?.user || null });
-    });
+    set({ user: session?.user ?? null });
   },
 
   fetchTransactions: async () => {
-    if (!get().user) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    set({ user });
     set({ loading: true });
     try {
       const data = await getTransactions();
@@ -119,7 +122,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   fetchGoals: async () => {
-    if (!get().user) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    set({ user });
     set({ loading: true });
     try {
       const data = await getGoals();
@@ -145,16 +152,58 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   fetchBudget: async () => {
-    if (!get().user) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    set({ user });
     set({ loading: true });
     try {
       const data = await getBudget();
-      if (data) set({ monthlyBudget: data.monthly_limit });
+      set({ monthlyBudget: data?.monthly_limit ?? null });
     } catch (error) {
       console.error(error);
     } finally {
       set({ loading: false });
     }
+  },
+
+  refreshAllData: async () => {
+    // Prefer local session first (reliable right after login); getUser() can lag or fail on cold start.
+    const { data: { session } } = await supabase.auth.getSession();
+    let user = session?.user ?? null;
+    if (!user) {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      user = u ?? null;
+    }
+    if (!user) {
+      return;
+    }
+    set({ user });
+
+    const [txResult, goalsResult, budgetResult] = await Promise.allSettled([
+      getTransactions(),
+      getGoals(),
+      getBudget(),
+    ]);
+
+    const patch: Partial<Pick<AppState, 'transactions' | 'goals' | 'monthlyBudget'>> = {};
+    if (txResult.status === 'fulfilled') {
+      patch.transactions = txResult.value;
+    } else {
+      console.error(txResult.reason);
+    }
+    if (goalsResult.status === 'fulfilled') {
+      patch.goals = goalsResult.value;
+    } else {
+      console.error(goalsResult.reason);
+    }
+    if (budgetResult.status === 'fulfilled') {
+      patch.monthlyBudget = budgetResult.value?.monthly_limit ?? null;
+    } else {
+      console.error(budgetResult.reason);
+    }
+    set(patch);
   },
 
   setBudget: async (limit) => {
@@ -164,6 +213,7 @@ export const useStore = create<AppState>((set, get) => ({
       set({ monthlyBudget: data.monthly_limit });
     } catch (error) {
       console.error(error);
+      throw error;
     } finally {
       set({ loading: false });
     }
@@ -179,13 +229,21 @@ export const useStore = create<AppState>((set, get) => ({
   getTotalExpenses: () => {
     const { transactions } = get();
     return transactions.reduce((acc, curr) => {
-      return curr.amount < 0 ? acc + Math.abs(Number(curr.amount)) : acc;
+      return isSpendingExpense(curr) ? acc + Math.abs(Number(curr.amount)) : acc;
     }, 0);
   },
 
+  /** Income minus all outflows (including goal allocations). Used for allocate checks and true cash position. */
   getNetBalance: () => {
-    const { getTotalIncome, getTotalExpenses } = get();
-    return getTotalIncome() - getTotalExpenses();
+    const { transactions } = get();
+    let income = 0;
+    let out = 0;
+    for (const curr of transactions) {
+      const a = Number(curr.amount);
+      if (a > 0) income += a;
+      else if (a < 0) out += Math.abs(a);
+    }
+    return income - out;
   },
 
   getRemainingBudget: () => {
@@ -209,3 +267,7 @@ export const useStore = create<AppState>((set, get) => ({
     return net;
   }
 }));
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  useStore.setState({ user: session?.user ?? null });
+});

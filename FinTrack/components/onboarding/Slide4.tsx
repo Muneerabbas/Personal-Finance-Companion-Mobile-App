@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
+
+import PrimaryButton from '@/components/ui/primary-button';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,9 +48,12 @@ export function Slide4() {
       </View>
 
       <View style={styles.buttonsContainer}>
-        <Pressable style={[styles.googleButton, { backgroundColor: c.primary }]} onPress={handleSignIn}>
-          <ThemedText style={styles.googleButtonText}>Sign In</ThemedText>
-        </Pressable>
+        <PrimaryButton
+          title="Sign In"
+          onPress={handleSignIn}
+          style={[styles.googleButton, { backgroundColor: c.primary }]}
+          textStyle={styles.googleButtonText}
+        />
 
         <Pressable style={[styles.guestButton, { backgroundColor: c.guestBg }]} onPress={handleGuest}>
           <ThemedText style={[styles.guestButtonText, { color: c.primary }]}>Continue as guest</ThemedText>
@@ -117,12 +122,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   googleButton: {
+    alignSelf: 'stretch',
     height: 56,
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
   },
   googleButtonText: {
     color: '#fff',

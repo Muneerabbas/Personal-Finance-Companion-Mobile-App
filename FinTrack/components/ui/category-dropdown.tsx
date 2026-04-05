@@ -1,19 +1,12 @@
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useState } from 'react';
-import {
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { OTHER_CATEGORY_LABEL } from '@/constants/transaction-category-styles';
 import { Colors, Fonts } from '@/constants/theme';
+import { BottomSheetScrollView, renderSheetBackdrop } from '@/context/bottom-sheet-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type CategoryDropdownProps = {
@@ -21,7 +14,7 @@ type CategoryDropdownProps = {
   value: string | null;
   onChange: (value: string) => void;
   placeholder?: string;
-  /** Modal header title (e.g. "Category", "Wallet"). */
+  /** Sheet header title (e.g. "Category", "Wallet"). */
   sheetTitle?: string;
   /** When this option is selected, a text field is shown below the trigger. */
   otherOptionValue?: string;
@@ -42,13 +35,29 @@ export default function CategoryDropdown({
   otherFieldPlaceholder = 'Type a category name',
 }: CategoryDropdownProps) {
   const [open, setOpen] = useState(false);
+  const sheetRef = useRef<BottomSheetModal>(null);
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
 
+  const snapPoints = useMemo(() => ['58%', '88%'], []);
+  const renderBackdrop = useCallback(renderSheetBackdrop, []);
+
+  useEffect(() => {
+    if (open) {
+      sheetRef.current?.present();
+    } else {
+      sheetRef.current?.dismiss();
+    }
+  }, [open]);
+
+  const handleDismiss = useCallback(() => {
+    setOpen(false);
+  }, []);
+
   const select = (item: string) => {
     onChange(item);
-    setOpen(false);
+    sheetRef.current?.dismiss();
   };
 
   const showOtherField = value === otherOptionValue && onOtherFieldChange != null;
@@ -97,65 +106,60 @@ export default function CategoryDropdown({
         />
       ) : null}
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={styles.modalRoot}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setOpen(false)}
-            accessibilityLabel={`Close ${sheetTitle} list`}
-          />
-          <View style={styles.modalCenter} pointerEvents="box-none">
-            <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={[styles.sheetHeader, { borderBottomColor: theme.border }]}>
-                <ThemedText style={[styles.sheetTitleText, { color: theme.text }]}>{sheetTitle}</ThemedText>
-                <Pressable onPress={() => setOpen(false)} hitSlop={10} accessibilityLabel="Close">
-                  <MaterialCommunityIcons name="close" size={24} color={theme.muted} />
-                </Pressable>
-              </View>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                style={styles.scroll}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}>
-                {options.map((item) => {
-                  const selected = item === value;
-                  return (
-                    <Pressable
-                      key={item}
-                      onPress={() => select(item)}
-                      style={[
-                        styles.option,
-                        {
-                          backgroundColor: selected
-                            ? isDark
-                              ? 'rgba(127, 61, 255, 0.2)'
-                              : 'rgba(127, 61, 255, 0.1)'
-                            : 'transparent',
-                        },
-                      ]}>
-                      <Text
-                        style={[
-                          styles.optionText,
-                          {
-                            color: selected ? theme.primary : theme.text,
-                            fontFamily: selected ? Fonts.semiBold : Fonts.sans,
-                          },
-                        ]}
-                        numberOfLines={2}
-                        ellipsizeMode="tail">
-                        {item}
-                      </Text>
-                      {selected ? (
-                        <MaterialCommunityIcons name="check" size={20} color={theme.primary} />
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
+      <BottomSheetModal
+        ref={sheetRef}
+        name="categoryDropdown"
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        onDismiss={handleDismiss}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: theme.card }}
+        handleIndicatorStyle={{ backgroundColor: theme.border }}>
+        <View style={[styles.sheetHeader, { borderBottomColor: theme.border }]}>
+          <ThemedText style={[styles.sheetTitleText, { color: theme.text }]}>{sheetTitle}</ThemedText>
+          <Pressable onPress={() => sheetRef.current?.dismiss()} hitSlop={10} accessibilityLabel="Close">
+            <MaterialCommunityIcons name="close" size={24} color={theme.muted} />
+          </Pressable>
         </View>
-      </Modal>
+        <BottomSheetScrollView
+          keyboardShouldPersistTaps="handled"
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}>
+          {options.map((item) => {
+            const selected = item === value;
+            return (
+              <Pressable
+                key={item}
+                onPress={() => select(item)}
+                style={[
+                  styles.option,
+                  {
+                    backgroundColor: selected
+                      ? isDark
+                        ? 'rgba(127, 61, 255, 0.2)'
+                        : 'rgba(127, 61, 255, 0.1)'
+                      : 'transparent',
+                  },
+                ]}>
+                <Text
+                  style={[
+                    styles.optionText,
+                    {
+                      color: selected ? theme.primary : theme.text,
+                      fontFamily: selected ? Fonts.semiBold : Fonts.sans,
+                    },
+                  ]}
+                  numberOfLines={2}
+                  ellipsizeMode="tail">
+                  {item}
+                </Text>
+                {selected ? <MaterialCommunityIcons name="check" size={20} color={theme.primary} /> : null}
+              </Pressable>
+            );
+          })}
+        </BottomSheetScrollView>
+      </BottomSheetModal>
     </View>
   );
 }
@@ -190,21 +194,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     fontSize: 16,
-  },
-  modalRoot: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  },
-  modalCenter: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    maxHeight: '72%',
-    borderRadius: 20,
-    borderWidth: 1,
-    overflow: 'hidden',
   },
   sheetHeader: {
     flexDirection: 'row',

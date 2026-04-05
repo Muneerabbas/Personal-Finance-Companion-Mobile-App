@@ -1,18 +1,16 @@
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import {
-  FlatList,
-  Modal,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
+import {
+  BottomSheetFlatList,
+  BottomSheetTextInput,
+  renderSheetBackdrop,
+} from '@/context/bottom-sheet-context';
 import { useCurrency } from '@/context/currency-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -30,6 +28,23 @@ export default function CurrencyPickerButton({ variant = 'default' }: CurrencyPi
   const { selectedCode, setSelectedCode, currencyNames, loading, currencySymbol } = useCurrency();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const sheetRef = useRef<BottomSheetModal>(null);
+
+  const snapPoints = useMemo(() => ['78%', '94%'], []);
+  const renderBackdrop = useCallback(renderSheetBackdrop, []);
+
+  useEffect(() => {
+    if (open) {
+      sheetRef.current?.present();
+    } else {
+      sheetRef.current?.dismiss();
+    }
+  }, [open]);
+
+  const handleDismiss = useCallback(() => {
+    setOpen(false);
+    setQuery('');
+  }, []);
 
   const rows = useMemo<Row[]>(() => {
     if (!currencyNames) return [];
@@ -40,12 +55,16 @@ export default function CurrencyPickerButton({ variant = 'default' }: CurrencyPi
     }));
     list.sort((a, b) => a.code.localeCompare(b.code));
     if (!q) return list;
-    return list.filter(
-      (r) => r.code.includes(q) || r.name.toLowerCase().includes(q),
-    );
+    return list.filter((r) => r.code.includes(q) || r.name.toLowerCase().includes(q));
   }, [currencyNames, query]);
 
   const label = loading ? '…' : selectedCode.toUpperCase();
+
+  const sheetBg = isDark ? '#171B2B' : '#FFFFFF';
+  const searchBg = isDark ? '#232A40' : '#F4F5F8';
+  const searchBorder = isDark ? '#343D59' : '#E5E7EB';
+  const searchColor = isDark ? '#F5F7FF' : '#111827';
+  const placeholderColor = isDark ? '#6B7280' : '#9CA3AF';
 
   return (
     <>
@@ -84,92 +103,84 @@ export default function CurrencyPickerButton({ variant = 'default' }: CurrencyPi
         )}
       </TouchableOpacity>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View style={styles.modalRoot}>
-          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
-          <View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: isDark ? '#171B2B' : '#FFFFFF',
-                paddingBottom: Math.max(insets.bottom, 16),
-                maxHeight: '88%',
-              },
-            ]}>
-            <View style={styles.sheetHeader}>
-              <ThemedText style={[styles.sheetTitle, { color: isDark ? '#F5F7FF' : '#202430' }]}>
-                Currency
-              </ThemedText>
-              <TouchableOpacity onPress={() => setOpen(false)} hitSlop={12}>
-                <Ionicons name="close" size={26} color={isDark ? '#9CA3AF' : '#6B7280'} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search code or name"
-              placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
-              style={[
-                styles.search,
-                {
-                  backgroundColor: isDark ? '#232A40' : '#F4F5F8',
-                  color: isDark ? '#F5F7FF' : '#111827',
-                  borderColor: isDark ? '#343D59' : '#E5E7EB',
-                },
-              ]}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <FlatList
-              data={rows}
-              keyExtractor={(item) => item.code}
-              keyboardShouldPersistTaps="handled"
-              initialNumToRender={24}
-              windowSize={10}
-              style={styles.list}
-              renderItem={({ item }) => {
-                const active = item.code === selectedCode.toLowerCase();
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.row,
-                      {
-                        backgroundColor: active
-                          ? isDark
-                            ? '#2A3148'
-                            : '#EEF2FF'
-                          : 'transparent',
-                      },
-                    ]}
-                    onPress={() => {
-                      setSelectedCode(item.code);
-                      setOpen(false);
-                      setQuery('');
-                    }}>
-                    <ThemedText
-                      style={[styles.rowCode, { color: isDark ? '#F5F7FF' : '#111827' }]}>
-                      {item.code.toUpperCase()}
-                    </ThemedText>
-                    <ThemedText
-                      style={[styles.rowName, { color: isDark ? '#9CA3AF' : '#6B7280' }]}
-                      numberOfLines={1}>
-                      {item.name}
-                    </ThemedText>
-                    {active ? (
-                      <Ionicons name="checkmark-circle" size={22} color={theme.primary} />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={
-                <ThemedText style={[styles.empty, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
-                  {currencyNames ? 'No matches' : 'Loading currencies…'}
-                </ThemedText>
-              }
-            />
+      <BottomSheetModal
+        ref={sheetRef}
+        name="currencyPicker"
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
+        onDismiss={handleDismiss}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: sheetBg }}
+        handleIndicatorStyle={{ backgroundColor: isDark ? '#3A3F55' : '#D1D5DB' }}>
+        <View style={[styles.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={styles.sheetHeader}>
+            <ThemedText style={[styles.sheetTitle, { color: isDark ? '#F5F7FF' : '#202430' }]}>
+              Currency
+            </ThemedText>
+            <TouchableOpacity onPress={() => sheetRef.current?.dismiss()} hitSlop={12}>
+              <Ionicons name="close" size={26} color={isDark ? '#9CA3AF' : '#6B7280'} />
+            </TouchableOpacity>
           </View>
+          <BottomSheetTextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search code or name"
+            placeholderTextColor={placeholderColor}
+            style={[
+              styles.search,
+              {
+                backgroundColor: searchBg,
+                color: searchColor,
+                borderColor: searchBorder,
+              },
+            ]}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <BottomSheetFlatList<Row>
+            data={rows}
+            keyExtractor={(item: Row) => item.code}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={24}
+            windowSize={10}
+            style={styles.flatList}
+            renderItem={({ item }: { item: Row }) => {
+              const active = item.code === selectedCode.toLowerCase();
+              return (
+                <TouchableOpacity
+                  style={[
+                    styles.row,
+                    {
+                      backgroundColor: active ? (isDark ? '#2A3148' : '#EEF2FF') : 'transparent',
+                    },
+                  ]}
+                  onPress={() => {
+                    setSelectedCode(item.code);
+                    sheetRef.current?.dismiss();
+                  }}>
+                  <ThemedText style={[styles.rowCode, { color: isDark ? '#F5F7FF' : '#111827' }]}>
+                    {item.code.toUpperCase()}
+                  </ThemedText>
+                  <ThemedText
+                    style={[styles.rowName, { color: isDark ? '#9CA3AF' : '#6B7280' }]}
+                    numberOfLines={1}>
+                    {item.name}
+                  </ThemedText>
+                  {active ? <Ionicons name="checkmark-circle" size={22} color={theme.primary} /> : null}
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <ThemedText style={[styles.empty, { color: isDark ? '#6B7280' : '#9CA3AF' }]}>
+                {currencyNames ? 'No matches' : 'Loading currencies…'}
+              </ThemedText>
+            }
+          />
         </View>
-      </Modal>
+      </BottomSheetModal>
     </>
   );
 }
@@ -210,20 +221,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
   },
-  modalRoot: {
+  sheetInner: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  sheet: {
-    maxWidth: '100%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 4,
+    minHeight: 120,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -268,7 +270,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 24,
   },
-  list: {
-    maxHeight: 420,
+  flatList: {
+    flex: 1,
   },
 });

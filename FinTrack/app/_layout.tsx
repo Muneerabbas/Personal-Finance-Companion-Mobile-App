@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
+import { BottomSheetProvider } from '@/context/bottom-sheet-context';
 import { CurrencyProvider } from '@/context/currency-context';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -87,6 +88,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <CurrencyProvider>
+        <BottomSheetProvider>
           <PaperProvider>
             <ThemeProvider
               value={{
@@ -104,13 +106,15 @@ export default function RootLayout() {
                 <Stack.Screen name="index" options={{ headerShown: false }} />
                 <Stack.Screen name="onboarding" options={{ headerShown: false }} />
                 <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="profile" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="goals-overview" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
               </Stack>
               <StatusBar style="auto" />
             </ThemeProvider>
           </PaperProvider>
+        </BottomSheetProvider>
       </CurrencyProvider>
     </SafeAreaProvider>
   );

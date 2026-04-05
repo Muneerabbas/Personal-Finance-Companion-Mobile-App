@@ -1,15 +1,18 @@
-import React from 'react';
-import { Modal, View, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+
 import { ThemedText } from '@/components/themed-text';
 import { CurrencyText } from '@/components/currency-text';
 import { Colors, Fonts } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   getCategoryDisplayLabel,
   GOAL_ALLOCATION_DISPLAY_LABEL,
   isGoalAllocationCategory,
 } from '@/constants/transaction-category-styles';
+import { BottomSheetScrollView, renderSheetBackdrop } from '@/context/bottom-sheet-context';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { Transaction } from './TransactionItem';
 
 type TransactionDetailModalProps = {
@@ -40,24 +43,22 @@ function formatFullTime(dateStr?: string): string {
   });
 }
 
-export default function TransactionDetailModal({ visible, transaction, onClose }: TransactionDetailModalProps) {
+function TransactionDetailBody({ transaction: tx }: { transaction: Transaction }) {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme];
 
-  if (!transaction) return null;
-
-  const isExpense = transaction.amount < 0;
-  const isGoalAllocation = isGoalAllocationCategory(transaction.category);
-  const isOther = transaction.isOtherCategory === true;
-  const iconBg = isOther ? (isDark ? '#2A3045' : '#E8E8ED') : transaction.iconBackground;
-  const iconCol = isOther ? (isDark ? '#9CA3AF' : '#6B7280') : transaction.iconColor;
-  const iconName = isOther ? 'pricetag-outline' : transaction.icon;
+  const isExpense = tx.amount < 0;
+  const isGoalAllocation = isGoalAllocationCategory(tx.category);
+  const isOther = tx.isOtherCategory === true;
+  const iconBg = isOther ? (isDark ? '#2A3045' : '#E8E8ED') : tx.iconBackground;
+  const iconCol = isOther ? (isDark ? '#9CA3AF' : '#6B7280') : tx.iconColor;
+  const iconName = isOther ? 'pricetag-outline' : tx.icon;
 
   const amountColor = isGoalAllocation
     ? isDark
       ? '#A78BFA'
-      : transaction.iconColor || '#6D28D9'
+      : tx.iconColor || '#6D28D9'
     : isExpense
       ? isDark
         ? '#F87171'
@@ -91,14 +92,14 @@ export default function TransactionDetailModal({ visible, transaction, onClose }
         : '#15803D';
 
   const rows: { label: string; value: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { label: 'Category', value: getCategoryDisplayLabel(transaction.category), icon: 'folder-outline' },
+    { label: 'Category', value: getCategoryDisplayLabel(tx.category), icon: 'folder-outline' },
     {
       label: 'Payment Method',
-      value: (isGoalAllocation ? 'Goal' : transaction.paymentMethod || '—').toUpperCase(),
+      value: (isGoalAllocation ? 'Goal' : tx.paymentMethod || '—').toUpperCase(),
       icon: 'card-outline',
     },
-    { label: 'Date', value: formatFullDate(transaction.date), icon: 'calendar-outline' },
-    { label: 'Time', value: formatFullTime(transaction.date), icon: 'time-outline' },
+    { label: 'Date', value: formatFullDate(tx.date), icon: 'calendar-outline' },
+    { label: 'Time', value: formatFullTime(tx.date), icon: 'time-outline' },
     {
       label: 'Type',
       value: isGoalAllocation ? GOAL_ALLOCATION_DISPLAY_LABEL : isExpense ? 'Expense' : 'Income',
@@ -107,122 +108,113 @@ export default function TransactionDetailModal({ visible, transaction, onClose }
   ];
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-      statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: isDark ? '#13172A' : '#FFFFFF' }]}>
-          {/* Handle bar */}
-          <View style={styles.handleRow}>
-            <View style={[styles.handle, { backgroundColor: isDark ? '#3A3F55' : '#D1D5DB' }]} />
-          </View>
+    <BottomSheetScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.heroSection}>
+        <View style={[styles.heroIcon, { backgroundColor: iconBg }]}>
+          <Ionicons name={iconName} size={36} color={iconCol} />
+        </View>
+        <ThemedText style={[styles.heroTitle, { color: theme.text }]} numberOfLines={2}>
+          {tx.title}
+        </ThemedText>
 
-          {/* Close button */}
-          <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={12}>
-            <Ionicons name="close" size={24} color={theme.muted} />
-          </Pressable>
+        <CurrencyText amountUsd={tx.amount} signed style={[styles.heroAmount, { color: amountColor }]} />
 
-          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            {/* Icon + Title */}
-            <View style={styles.heroSection}>
-              <View style={[styles.heroIcon, { backgroundColor: iconBg }]}>  
-                <Ionicons name={iconName} size={36} color={iconCol} />
-              </View>
-              <ThemedText style={[styles.heroTitle, { color: theme.text }]} numberOfLines={2}>
-                {transaction.title}
-              </ThemedText>
-
-              {/* Amount */}
-              <CurrencyText
-                amountUsd={transaction.amount}
-                signed
-                style={[styles.heroAmount, { color: amountColor }]}
-              />
-
-              {/* Type badge */}
-              <View style={[styles.typeBadge, { backgroundColor: typeBadgeColor }]}>
-                <Ionicons
-                  name={isGoalAllocation ? 'flag' : isExpense ? 'arrow-down-circle' : 'arrow-up-circle'}
-                  size={14}
-                  color={typeBadgeTextColor}
-                />
-                <ThemedText style={[styles.typeBadgeText, { color: typeBadgeTextColor }]}>
-                  {isGoalAllocation ? GOAL_ALLOCATION_DISPLAY_LABEL : isExpense ? 'Expense' : 'Income'}
-                </ThemedText>
-              </View>
-            </View>
-
-            {/* Detail rows */}
-            <View style={[styles.detailCard, { backgroundColor: isDark ? '#1A1F35' : '#F9FAFB', borderColor: isDark ? '#232A3F' : '#E5E7EB' }]}>
-              {rows.map((row, index) => (
-                <View
-                  key={row.label}
-                  style={[
-                    styles.detailRow,
-                    index < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? '#232A3F' : '#E5E7EB' },
-                  ]}>
-                  <View style={styles.detailLabelRow}>
-                    <Ionicons name={row.icon} size={18} color={theme.muted} style={{ marginRight: 10 }} />
-                    <ThemedText style={[styles.detailLabel, { color: theme.muted }]}>{row.label}</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]} numberOfLines={1}>
-                    {row.value}
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
-
-            {/* Transaction ID */}
-            <ThemedText style={[styles.txId, { color: isDark ? '#4B5068' : '#9CA3AF' }]}>
-              ID: {transaction.id}
-            </ThemedText>
-          </ScrollView>
+        <View style={[styles.typeBadge, { backgroundColor: typeBadgeColor }]}>
+          <Ionicons
+            name={isGoalAllocation ? 'flag' : isExpense ? 'arrow-down-circle' : 'arrow-up-circle'}
+            size={14}
+            color={typeBadgeTextColor}
+          />
+          <ThemedText style={[styles.typeBadgeText, { color: typeBadgeTextColor }]}>
+            {isGoalAllocation ? GOAL_ALLOCATION_DISPLAY_LABEL : isExpense ? 'Expense' : 'Income'}
+          </ThemedText>
         </View>
       </View>
-    </Modal>
+
+      <View
+        style={[
+          styles.detailCard,
+          { backgroundColor: isDark ? '#1A1F35' : '#F9FAFB', borderColor: isDark ? '#232A3F' : '#E5E7EB' },
+        ]}>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[
+              styles.detailRow,
+              index < rows.length - 1 && {
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: isDark ? '#232A3F' : '#E5E7EB',
+              },
+            ]}>
+            <View style={styles.detailLabelRow}>
+              <Ionicons name={row.icon} size={18} color={theme.muted} style={{ marginRight: 10 }} />
+              <ThemedText style={[styles.detailLabel, { color: theme.muted }]}>{row.label}</ThemedText>
+            </View>
+            <ThemedText style={[styles.detailValue, { color: theme.text }]} numberOfLines={1}>
+              {row.value}
+            </ThemedText>
+          </View>
+        ))}
+      </View>
+
+      <ThemedText style={[styles.txId, { color: isDark ? '#4B5068' : '#9CA3AF' }]}>ID: {tx.id}</ThemedText>
+    </BottomSheetScrollView>
+  );
+}
+
+export default function TransactionDetailModal({ visible, transaction, onClose }: TransactionDetailModalProps) {
+  const sheetRef = useRef<BottomSheetModal>(null);
+  const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
+
+  const snapPoints = useMemo(() => ['78%', '95%'], []);
+  const renderBackdrop = useCallback(renderSheetBackdrop, []);
+
+  useEffect(() => {
+    if (visible && transaction) {
+      sheetRef.current?.present();
+    } else {
+      sheetRef.current?.dismiss();
+    }
+  }, [visible, transaction]);
+
+  const handleDismiss = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  return (
+    <BottomSheetModal
+      ref={sheetRef}
+      name="transactionDetail"
+      snapPoints={snapPoints}
+      enablePanDownToClose
+      onDismiss={handleDismiss}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: isDark ? '#13172A' : '#FFFFFF' }}
+      handleIndicatorStyle={{ backgroundColor: isDark ? '#3A3F55' : '#D1D5DB' }}>
+      <Pressable style={styles.closeBtn} onPress={() => sheetRef.current?.dismiss()} hitSlop={12}>
+        <Ionicons name="close" size={24} color={Colors[colorScheme].muted} />
+      </Pressable>
+      {transaction ? <TransactionDetailBody transaction={transaction} /> : <View style={styles.emptyStub} />}
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: '85%',
-    paddingBottom: 40,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+  emptyStub: {
+    minHeight: 1,
   },
   closeBtn: {
     position: 'absolute',
-    top: 16,
-    right: 20,
+    top: 8,
+    right: 16,
     zIndex: 10,
     padding: 4,
   },
   content: {
     paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingTop: 36,
+    paddingBottom: 28,
   },
   heroSection: {
     alignItems: 'center',

@@ -1,23 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useEffect, useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import BalanceCard from '@/components/home/BalanceCard';
 import BudgetCard from '@/components/home/BudgetCard';
 import IncomeExpenseCard from '@/components/home/IncomeExpenseCard';
-import InsightsSection from '@/components/home/InsightsSection';
 import SafeToSpendCard from '@/components/home/SafeToSpendCard';
 import SpendingChart from '@/components/home/SpendingChart';
 import type { ChartPoint } from '@/components/home/SpendingChart';
 import TransactionList from '@/components/home/TransactionList';
 import AppHeader from '@/components/layout/AppHeader';
 import { Colors } from '@/constants/theme';
-import { GOAL_SAVING_CATEGORY } from '@/constants/transaction-category-styles';
+import { isSpendingExpense } from '@/constants/transaction-category-styles';
 import { useStore } from '@/store/useStore';
 import { HOME_RECENT_TRANSACTION_COUNT } from '@/data/dashboard-mock';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -80,10 +80,8 @@ export default function HomeScreen() {
   const theme = Colors[colorScheme];
 
   const transactions = useStore(state => state.transactions);
-  const fetchTransactions = useStore(state => state.fetchTransactions);
-  const fetchBudget = useStore(state => state.fetchBudget);
+  const refreshAllData = useStore(state => state.refreshAllData);
   const monthlyBudget = useStore(state => state.monthlyBudget);
-  const getNetBalance = useStore(state => state.getNetBalance);
 
   /** ON: income/expenses for this week through today. OFF: one day at a time (defaults to today). */
   const [toDateEnabled, setToDateEnabled] = useState(true);
@@ -91,9 +89,10 @@ export default function HomeScreen() {
   const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
-    fetchTransactions();
-    fetchBudget();
-  }, []);
+    refreshAllData();
+  }, [refreshAllData]);
+
+  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
 
   const handleWeekChange = useCallback((newOffset: number) => {
     setWeekOffset(newOffset);
@@ -122,7 +121,7 @@ export default function HomeScreen() {
     return weekDays.map((day) => {
       const dayTxs = txByDate[day.dateKey] || [];
       const totalSpent = dayTxs
-        .filter((tx) => tx.amount < 0 && tx.category !== GOAL_SAVING_CATEGORY)
+        .filter((tx) => isSpendingExpense(tx))
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
       return {
         value: totalSpent,
@@ -211,6 +210,11 @@ export default function HomeScreen() {
     defaultDayBarIndex,
   ]);
 
+  const recentTransactions = useMemo(
+    () => filteredTransactions.slice(0, HOME_RECENT_TRANSACTION_COUNT),
+    [filteredTransactions],
+  );
+
   // Compute dashboard metrics based on filtered transactions
   const totalIncome = useMemo(() => {
     return filteredTransactions
@@ -220,11 +224,11 @@ export default function HomeScreen() {
 
   const totalExpenses = useMemo(() => {
     return filteredTransactions
-      .filter((tx) => tx.amount < 0 && tx.category !== GOAL_SAVING_CATEGORY)
+      .filter((tx) => isSpendingExpense(tx))
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   }, [filteredTransactions]);
 
-  const netBalanceAllTime = getNetBalance();
+  const netBalanceAllTime = useStore((state) => state.getNetBalance());
   const budget = monthlyBudget || 2500;
   const remainingBudget = Math.max(0, budget - totalExpenses);
 
@@ -236,16 +240,25 @@ export default function HomeScreen() {
     ? remainingBudget / daysLeftInMonth
     : remainingBudget;
 
-  const potentialSavings = totalIncome - budget;
-
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <AppHeader />
+      </View>
       <ScrollView
         style={[styles.container, { backgroundColor: theme.background }]}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}>
-        <AppHeader />
-        
+        contentContainerStyle={[styles.contentContainer, styles.scrollContentGrow]}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+            progressBackgroundColor={theme.card}
+          />
+        }>
         <BalanceCard amountUsd={netBalanceAllTime} />
         
         <IncomeExpenseCard
@@ -260,8 +273,6 @@ export default function HomeScreen() {
         />
         
         <SafeToSpendCard safeToSpendUsd={safeToSpend} />
-        
-        <InsightsSection potentialSavingsUsd={potentialSavings} />
 
         <View style={styles.chartSection}>
           <SpendingChart
@@ -277,10 +288,12 @@ export default function HomeScreen() {
           />
         </View>
 
-        <TransactionList
-          transactions={filteredTransactions.slice(0, HOME_RECENT_TRANSACTION_COUNT)}
-          onPressSeeAll={() => router.push('/(tabs)/transaction')}
-        />
+        {recentTransactions.length > 0 ? (
+          <TransactionList
+            transactions={recentTransactions}
+            onPressSeeAll={() => router.push('/(tabs)/transaction')}
+          />
+        ) : null}
 
         <View style={styles.scrollFooter} accessible accessibilityLabel="Made with love for Zorvyn">
           <View style={styles.footerRow}>
@@ -306,12 +319,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F6F6F8',
   },
-  contentContainer: {
+  headerWrap: {
     paddingHorizontal: 20,
     paddingTop: 12,
+    marginBottom: 16,
+  },
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 0,
     paddingBottom: 140,
     gap: 16,
   },
+  scrollContentGrow: { flexGrow: 1 },
   chartSection: {
     marginTop: 4,
   },

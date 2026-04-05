@@ -1,17 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Keyboard, type KeyboardEvent, Platform, Pressable, StyleSheet, View } from 'react-native';
+import type { TextInput as GHTextInput } from 'react-native-gesture-handler';
 
 import PrimaryButton from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
+import {
+  BottomSheetScrollView,
+  BottomSheetTextInput,
+  renderSheetBackdrop,
+} from '@/context/bottom-sheet-context';
 import { useCurrency } from '@/context/currency-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
@@ -49,12 +48,14 @@ export default function CreateGoalModal({
   onClose,
   onCreate,
 }: CreateGoalModalProps) {
-  const titleRef = useRef<TextInput>(null);
+  const sheetRef = useRef<BottomSheetModal>(null);
+  const titleRef = useRef<GHTextInput>(null);
   const [name, setName] = useState('');
   const [targetText, setTargetText] = useState('');
   const [durationMonthsText, setDurationMonthsText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   const { convertDisplayToUsd, currencySymbol } = useCurrency();
   const card = useThemeColor({}, 'card');
@@ -63,17 +64,42 @@ export default function CreateGoalModal({
   const muted = useThemeColor({}, 'muted');
   const background = useThemeColor({}, 'background');
 
+  /** Taller snaps + extend keyboard mode so lower fields stay above the keyboard on Android. */
+  const snapPoints = useMemo(() => ['85%', '97%'], []);
+  const renderBackdrop = useCallback(renderSheetBackdrop, []);
+
   useEffect(() => {
     if (visible) {
+      sheetRef.current?.present();
       setName('');
       setTargetText('');
       setDurationMonthsText('');
       setError(null);
       setSubmitting(false);
-      const t = setTimeout(() => titleRef.current?.focus(), 300);
+      const t = setTimeout(() => titleRef.current?.focus(), 350);
       return () => clearTimeout(t);
     }
+    sheetRef.current?.dismiss();
   }, [visible]);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = (e: KeyboardEvent) => {
+      setKeyboardInset(e.endCoordinates.height);
+    };
+    const onHide = () => setKeyboardInset(0);
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
+  const handleDismiss = useCallback(() => {
+    onClose();
+  }, [onClose]);
 
   const targetUsd = convertDisplayToUsd(parseAmount(targetText));
   const months = parseOptionalMonths(durationMonthsText);
@@ -118,7 +144,7 @@ export default function CreateGoalModal({
         deadline,
         is_primary: isFirstGoal,
       });
-      onClose();
+      sheetRef.current?.dismiss();
     } catch (e) {
       const msg =
         e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string'
@@ -133,129 +159,121 @@ export default function CreateGoalModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboard}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.sheet, { backgroundColor: card, borderColor: border }]}>
-              <View style={[styles.handle, { backgroundColor: border }]} />
-              <ThemedText style={[styles.title, { color: text }]}>New goal</ThemedText>
-              <ThemedText style={[styles.subtitle, { color: muted }]}>
-                Name your goal, set a target, and optionally pick how long you plan to save.
-              </ThemedText>
+    <BottomSheetModal
+      ref={sheetRef}
+      name="createGoal"
+      snapPoints={snapPoints}
+      enablePanDownToClose
+      keyboardBehavior="extend"
+      keyboardBlurBehavior="none"
+      android_keyboardInputMode="adjustResize"
+      onDismiss={handleDismiss}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: card }}
+      handleIndicatorStyle={{ backgroundColor: border }}>
+      <BottomSheetScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 28 + keyboardInset + (Platform.OS === 'android' ? 24 : 12) },
+        ]}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.inner}>
+          <ThemedText style={[styles.title, { color: text }]}>New goal</ThemedText>
+          <ThemedText style={[styles.subtitle, { color: muted }]}>
+            Name your goal, set a target, and optionally pick how long you plan to save.
+          </ThemedText>
 
-              <ThemedText style={[styles.fieldLabel, { color: muted }]}>Goal name</ThemedText>
-              <TextInput
-                ref={titleRef}
-                value={name}
-                onChangeText={(t) => {
-                  setName(t);
-                  setError(null);
-                }}
-                placeholder="e.g. Emergency fund"
-                placeholderTextColor={muted}
-                style={[
-                  styles.input,
-                  {
-                    color: text,
-                    borderColor: error && !name.trim() ? '#DC2626' : border,
-                    backgroundColor: background,
-                  },
-                ]}
-                autoCapitalize="sentences"
-              />
+          <ThemedText style={[styles.fieldLabel, { color: muted }]}>Goal name</ThemedText>
+          <BottomSheetTextInput
+            ref={titleRef}
+            value={name}
+            onChangeText={(t) => {
+              setName(t);
+              setError(null);
+            }}
+            placeholder="e.g. Emergency fund"
+            placeholderTextColor={muted}
+            style={[
+              styles.input,
+              {
+                color: text,
+                borderColor: error && !name.trim() ? '#DC2626' : border,
+                backgroundColor: background,
+              },
+            ]}
+            autoCapitalize="sentences"
+          />
 
-              <ThemedText style={[styles.fieldLabel, { color: muted }]}>Target amount</ThemedText>
-              <TextInput
-                value={targetText}
-                onChangeText={(t) => {
-                  setTargetText(t);
-                  setError(null);
-                }}
-                placeholder={currencySymbol ? `${currencySymbol}0` : '0'}
-                placeholderTextColor={muted}
-                keyboardType="decimal-pad"
-                style={[
-                  styles.input,
-                  {
-                    color: text,
-                    borderColor: border,
-                    backgroundColor: background,
-                  },
-                ]}
-              />
+          <ThemedText style={[styles.fieldLabel, { color: muted }]}>Target amount</ThemedText>
+          <BottomSheetTextInput
+            value={targetText}
+            onChangeText={(t) => {
+              setTargetText(t);
+              setError(null);
+            }}
+            placeholder={currencySymbol ? `${currencySymbol}0` : '0'}
+            placeholderTextColor={muted}
+            keyboardType="decimal-pad"
+            style={[
+              styles.input,
+              {
+                color: text,
+                borderColor: border,
+                backgroundColor: background,
+              },
+            ]}
+          />
 
-              <ThemedText style={[styles.fieldLabel, { color: muted }]}>
-                Target duration (optional)
-              </ThemedText>
-              <TextInput
-                value={durationMonthsText}
-                onChangeText={(t) => {
-                  setDurationMonthsText(t);
-                  setError(null);
-                }}
-                placeholder="Months from now"
-                placeholderTextColor={muted}
-                keyboardType="number-pad"
-                style={[
-                  styles.input,
-                  {
-                    color: text,
-                    borderColor: border,
-                    backgroundColor: background,
-                  },
-                ]}
-              />
-              {months != null ? (
-                <ThemedText style={[styles.hint, { color: muted }]}>
-                  Deadline set to ~{months} month{months === 1 ? '' : 's'} from today.
-                </ThemedText>
-              ) : null}
+          <ThemedText style={[styles.fieldLabel, { color: muted }]}>Target duration (optional)</ThemedText>
+          <BottomSheetTextInput
+            value={durationMonthsText}
+            onChangeText={(t) => {
+              setDurationMonthsText(t);
+              setError(null);
+            }}
+            placeholder="Months from now"
+            placeholderTextColor={muted}
+            keyboardType="number-pad"
+            style={[
+              styles.input,
+              {
+                color: text,
+                borderColor: border,
+                backgroundColor: background,
+              },
+            ]}
+          />
+          {months != null ? (
+            <ThemedText style={[styles.hint, { color: muted }]}>
+              Deadline set to ~{months} month{months === 1 ? '' : 's'} from today.
+            </ThemedText>
+          ) : null}
 
-              {error ? (
-                <ThemedText style={styles.errorText} lightColor="#DC2626" darkColor="#F87171">
-                  {error}
-                </ThemedText>
-              ) : null}
+          {error ? (
+            <ThemedText style={styles.errorText} lightColor="#DC2626" darkColor="#F87171">
+              {error}
+            </ThemedText>
+          ) : null}
 
-              <PrimaryButton title="Create Goal" onPress={handleCreate} disabled={!canSubmit} loading={submitting} />
+          <PrimaryButton title="Create Goal" onPress={handleCreate} disabled={!canSubmit} loading={submitting} />
 
-              <Pressable onPress={onClose} style={styles.cancelBtn} hitSlop={12}>
-                <ThemedText style={[styles.cancelText, { color: muted }]}>Cancel</ThemedText>
-              </Pressable>
-            </View>
+          <Pressable onPress={() => sheetRef.current?.dismiss()} style={styles.cancelBtn} hitSlop={12}>
+            <ThemedText style={[styles.cancelText, { color: muted }]}>Cancel</ThemedText>
           </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
+        </View>
+      </BottomSheetScrollView>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  keyboard: { width: '100%' },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
+  scrollContent: {
     paddingHorizontal: 22,
-    paddingTop: 10,
-    paddingBottom: 28,
-    gap: 8,
-    maxHeight: '92%',
   },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    marginBottom: 8,
+  inner: {
+    gap: 8,
+    paddingTop: 4,
   },
   title: {
     fontFamily: Fonts.bold,

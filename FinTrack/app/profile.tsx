@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,15 +7,23 @@ import { useStore } from '@/store/useStore';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import PrimaryButton from '@/components/ui/primary-button';
 
 export default function ProfileScreen() {
   const user = useStore((state) => state.user);
+  const fetchUser = useStore((state) => state.fetchUser);
+  const refreshAllData = useStore((state) => state.refreshAllData);
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const router = useRouter();
   
   const [loading, setLoading] = useState(false);
+
+  const refreshProfile = useCallback(async () => {
+    await Promise.all([fetchUser(), refreshAllData()]);
+  }, [fetchUser, refreshAllData]);
+  const { refreshing, onRefresh } = usePullRefresh(refreshProfile);
 
   const handleSignOut = async () => {
     setLoading(true);
@@ -40,7 +48,18 @@ export default function ProfileScreen() {
         <View style={{ width: 24 }} />
       </View>
       
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[styles.content, styles.scrollContentGrow]}
+        alwaysBounceVertical
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+            progressBackgroundColor={theme.card}
+          />
+        }>
         <View style={styles.avatarContainer}>
           <View style={[styles.avatar, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Ionicons name="person" size={48} color={theme.primary} />
@@ -94,6 +113,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
   },
+  scrollContentGrow: { flexGrow: 1 },
   avatarContainer: {
     alignItems: 'center',
     marginBottom: 40,

@@ -1,18 +1,19 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppHeader from '@/components/layout/AppHeader';
 import { ThemedText } from '@/components/themed-text';
-import { OTHER_CATEGORY_LABEL, visualForCategory } from '@/constants/transaction-category-styles';
+import { OTHER_CATEGORY_LABEL, isSpendingExpense, visualForCategory } from '@/constants/transaction-category-styles';
 import { Fonts } from '@/constants/theme';
 import { useCurrency } from '@/context/currency-context';
 import { useStore } from '@/store/useStore';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 type CategorySlice = {
@@ -103,6 +104,7 @@ function weeklyBarsFromExpenses(count: number, expenseAmounts: number[]) {
 export default function BudgetScreen() {
   const router = useRouter();
   const allTransactions = useStore((state) => state.transactions);
+  const refreshAllData = useStore((state) => state.refreshAllData);
   const { formatUsd } = useCurrency();
   const colorScheme = useColorScheme() ?? 'dark';
   const isDark = colorScheme === 'dark';
@@ -111,6 +113,8 @@ export default function BudgetScreen() {
 
   const [monthOffset, setMonthOffset] = useState(0);
   const MAX_MONTH_OFFSET = 3; // 4 months total
+
+  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
 
   // Find earliest transaction month to cap navigation
   const earliestMonthsBack = useMemo(() => {
@@ -141,7 +145,7 @@ export default function BudgetScreen() {
   }, [allTransactions, monthStart, monthEnd]);
 
   const monthExpenseTransactions = useMemo(
-    () => monthTransactions.filter((transaction) => transaction.amount < 0),
+    () => monthTransactions.filter((transaction) => isSpendingExpense(transaction)),
     [monthTransactions],
   );
 
@@ -198,7 +202,7 @@ export default function BudgetScreen() {
   }, [monthTransactions, selectedWeekIdx, weekBuckets]);
 
   const expenseTransactions = useMemo(
-    () => visibleTransactions.filter((transaction) => transaction.amount < 0),
+    () => visibleTransactions.filter((transaction) => isSpendingExpense(transaction)),
     [visibleTransactions],
   );
 
@@ -305,11 +309,23 @@ export default function BudgetScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: backgroundToken }]} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <AppHeader />
+      </View>
       <ScrollView
         style={[styles.container, { backgroundColor: backgroundToken }]}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <AppHeader />
+        contentContainerStyle={[styles.content, styles.scrollContentGrow]}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={primaryForeground}
+            colors={[primaryForeground]}
+            progressBackgroundColor={cardToken}
+          />
+        }>
         <View style={styles.headerBlock}>
           <ThemedText style={styles.heroTitle}>Financial insights</ThemedText>
           <View style={styles.monthNav}>
@@ -544,40 +560,7 @@ export default function BudgetScreen() {
           </View>
         </View>
 
-        {/* Smart prediction */}
-        <LinearGradient
-          colors={
-            isDark
-              ? ['rgba(139,124,255,0.14)', 'rgba(19,24,39,0.2)']
-              : ['rgba(127,61,255,0.08)', 'rgba(255,255,255,0.9)']
-          }
-          style={[styles.predictionCard, { borderColor: borderToken, backgroundColor: surfaceContainer }]}>
-          <View style={styles.predictionWatermark} pointerEvents="none">
-            <MaterialCommunityIcons name="chart-timeline-variant" size={160} color={primaryForeground} />
-          </View>
-          <View style={styles.predictionInner}>
-            <ThemedText style={[styles.predictionTitle, { color: primaryForeground }]}>{prediction.title}</ThemedText>
-            <ThemedText style={[styles.predictionBody, { color: mutedForeground }]}>{prediction.body}</ThemedText>
-            <Pressable
-              onPress={() =>
-                prediction.cta === 'Add expenses'
-                  ? router.push('/add-transaction')
-                  : router.push('/(tabs)/challenges')
-              }
-              style={({ pressed }) => [
-                styles.predictionCta,
-                {
-                  backgroundColor: primaryForeground,
-                  opacity: pressed ? 0.88 : 1,
-                },
-              ]}>
-              <ThemedText
-                style={[styles.predictionCtaText, { color: isDark ? backgroundToken : secondarySurface }]}>
-                {prediction.cta}
-              </ThemedText>
-            </Pressable>
-          </View>
-        </LinearGradient>
+        
       </ScrollView>
     </SafeAreaView>
   );
@@ -590,12 +573,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  headerWrap: {
     paddingHorizontal: 20,
     paddingTop: 16,
+    marginBottom: 20,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 0,
     paddingBottom: 140,
     gap: 20,
   },
+  scrollContentGrow: { flexGrow: 1 },
   headerBlock: {
     gap: 6,
     marginBottom: 4,

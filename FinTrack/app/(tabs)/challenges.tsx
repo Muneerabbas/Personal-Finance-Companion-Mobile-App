@@ -2,18 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
 
 import AddToGoalModal from '@/components/goals/AddToGoalModal';
 import CreateGoalModal, { type CreateGoalSubmitPayload } from '@/components/goals/CreateGoalModal';
+import SetMonthlyBudgetCard from '@/components/goals/SetMonthlyBudgetCard';
 import { CurrencyText } from '@/components/currency-text';
 import AppHeader from '@/components/layout/AppHeader';
 import PrimaryButton from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useStore } from '@/store/useStore';
 
@@ -101,79 +102,15 @@ function ActiveGoalCard({
           </View>
         </View>
         {showAddButton && onAddToGoal ? (
-          <Pressable
+          <PrimaryButton
+            title="Add funds"
             onPress={onAddToGoal}
-            accessibilityRole="button"
             accessibilityLabel="Add money to this goal"
-            style={({ pressed }) => [
-              styles.addToGoalBtnFilled,
-              { backgroundColor: primary, opacity: pressed ? 0.88 : 1 },
-            ]}>
-            <ThemedText style={styles.addToGoalBtnTextFilled}>Add Funds</ThemedText>
-          </Pressable>
+            style={[styles.addToGoalBtnFilled, { backgroundColor: primary }]}
+            textStyle={styles.addToGoalBtnTextFilled}
+          />
         ) : null}
       </View>
-    </View>
-  );
-}
-
-function MonthlyBudgetRing({
-  budget,
-  totalExpenses,
-  cardBg,
-  border,
-  text,
-  muted,
-  primary,
-  trackBg,
-}: {
-  budget: number;
-  totalExpenses: number;
-  cardBg: string;
-  border: string;
-  text: string;
-  muted: string;
-  primary: string;
-  trackBg: string;
-}) {
-  const utilizedRaw = budget > 0 ? (totalExpenses / budget) * 100 : 0;
-  const utilized = Math.min(100, Math.round(utilizedRaw));
-  const radius = 52;
-  const strokeWidth = 9;
-  const circum = 2 * Math.PI * radius;
-  const strokeDashoffset = circum - (utilized / 100) * circum;
-
-  return (
-    <View style={[styles.budgetCard, { backgroundColor: cardBg, borderColor: border }]}>
-      <ThemedText style={[styles.budgetEyebrow, { color: muted }]}>Monthly budget</ThemedText>
-      <View style={styles.ringWrap}>
-        <Svg width={124} height={124} viewBox="0 0 124 124" style={[styles.ringSvg, { transform: [{ rotate: '-90deg' }] }]}>
-          <Circle cx="62" cy="62" r={radius} stroke={trackBg} strokeWidth={strokeWidth} fill="none" />
-          <Circle
-            cx="62"
-            cy="62"
-            r={radius}
-            stroke={primary}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={circum}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-          />
-        </Svg>
-        <View style={styles.ringCenter}>
-          <ThemedText style={[styles.ringPct, { color: text }]}>{utilized}%</ThemedText>
-          <ThemedText style={[styles.ringLabel, { color: muted }]}>utilized</ThemedText>
-        </View>
-      </View>
-      <ThemedText style={[styles.budgetFoot, { color: muted }]}>
-        You&apos;re on track to save{' '}
-        <CurrencyText
-          amountUsd={Math.max(0, budget - totalExpenses)}
-          style={{ color: primary, fontFamily: Fonts.bold, fontSize: 14 }}
-        />{' '}
-        this month.
-      </ThemedText>
     </View>
   );
 }
@@ -222,15 +159,12 @@ function MilestoneRow({
           <View style={[styles.milestoneFill, { width: `${Math.min(100, progress)}%`, backgroundColor: accent }]} />
         </View>
         {showAddButton && onAddToGoal ? (
-          <Pressable
+          <PrimaryButton
+            title="Add funds"
             onPress={onAddToGoal}
-            style={({ pressed }) => [
-              styles.milestoneAddBtnFilled,
-              { backgroundColor: primary, opacity: pressed ? 0.88 : 1 },
-            ]}
-            hitSlop={6}>
-            <ThemedText style={styles.milestoneAddBtnTextFilled}>Add Funds</ThemedText>
-          </Pressable>
+            style={[styles.milestoneAddBtnFilled, { backgroundColor: primary }]}
+            textStyle={styles.milestoneAddBtnTextFilled}
+          />
         ) : null}
       </View>
       <ThemedText style={[styles.milestonePct, { color: accent }]}>{Math.min(100, progress)}%</ThemedText>
@@ -353,11 +287,12 @@ function SmartInsight({
             <ThemedText style={{ color: text, fontFamily: Fonts.semiBold }}>{goalTitle}</ThemedText> goal 12 days
             earlier.
           </ThemedText>
-          <Pressable
+          <PrimaryButton
+            title="Adjust budget"
             onPress={onAdjustBudget}
-            style={({ pressed }) => [styles.insightCta, { backgroundColor: primary, opacity: pressed ? 0.9 : 1 }]}>
-            <ThemedText style={[styles.insightCtaText, { color: '#FFFFFF' }]}>Adjust budget</ThemedText>
-          </Pressable>
+            style={[styles.insightCta, { backgroundColor: primary }]}
+            textStyle={styles.insightCtaText}
+          />
         </View>
       </View>
     </LinearGradient>
@@ -397,8 +332,6 @@ export default function ChallengesScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
-  const { width } = useWindowDimensions();
-  const isWide = width >= 640;
 
   const background = useThemeColor({}, 'background');
   const card = useThemeColor({}, 'card');
@@ -407,15 +340,12 @@ export default function ChallengesScreen() {
   const text = useThemeColor({}, 'text');
   const primary = useThemeColor({}, 'primary');
   const trackBg = isDark ? border : '#EEF1F6';
-  const budgetCardBg = isDark ? '#1E2436' : '#F4F6FA';
   const insightInner = isDark ? '#151a28' : '#F8FAFC';
 
   const goals = useStore((state) => state.goals);
   const fetchGoals = useStore((state) => state.fetchGoals);
   const addGoal = useStore((state) => state.addGoal);
-  const monthlyBudget = useStore((state) => state.monthlyBudget);
-  const getTotalExpenses = useStore((state) => state.getTotalExpenses);
-  const getNetBalance = useStore((state) => state.getNetBalance);
+  const netBalance = useStore((state) => state.getNetBalance());
   const allocateToGoal = useStore((state) => state.allocateToGoal);
 
   const [allocateTarget, setAllocateTarget] = useState<{ id: string; title: string } | null>(null);
@@ -425,7 +355,10 @@ export default function ChallengesScreen() {
     fetchGoals();
   }, [fetchGoals]);
 
-  const netBalance = getNetBalance();
+  const pullRefreshChallenges = useCallback(() => useStore.getState().refreshAllData(), []);
+  const { refreshing, onRefresh } = usePullRefresh(pullRefreshChallenges);
+
+  const availableToAllocateUsd = Math.max(0, netBalance);
 
   const openAllocate = useCallback((id: string, title: string) => {
     setAllocateTarget({ id, title });
@@ -460,8 +393,6 @@ export default function ChallengesScreen() {
     [addGoal],
   );
 
-  const totalExpenses = getTotalExpenses();
-
   const { activeGoals, completedGoals } = useMemo(() => {
     const active: typeof goals = [];
     const done: typeof goals = [];
@@ -478,7 +409,7 @@ export default function ChallengesScreen() {
   );
 
   const milestoneGoals = useMemo(
-    () => activeGoals.filter((g) => (primaryGoal ? g.id !== primaryGoal.id : true)).slice(0, 6),
+    () => activeGoals.filter((g) => (primaryGoal ? g.id !== primaryGoal.id : true)).slice(0, 3),
     [activeGoals, primaryGoal],
   );
 
@@ -488,12 +419,23 @@ export default function ChallengesScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: background }]} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <AppHeader />
+      </View>
       <ScrollView
         style={[styles.scroll, { backgroundColor: background }]}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <AppHeader />
-
+        contentContainerStyle={[styles.content, styles.scrollContentGrow]}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={primary}
+            colors={[primary]}
+            progressBackgroundColor={card}
+          />
+        }>
         <View style={styles.pageTitleRow}>
           <View style={styles.pageTitleBlock}>
             <ThemedText type="title" style={[styles.pageTitle, { color: text }]}>
@@ -503,83 +445,69 @@ export default function ChallengesScreen() {
               Strategic planning for your future.
             </ThemedText>
           </View>
-          <Pressable
+          <PrimaryButton
+            variant="outline"
+            title="Add Goal"
             onPress={() => setCreateModalVisible(true)}
-            accessibilityRole="button"
             accessibilityLabel="Add a new goal"
-            style={({ pressed }) => [
-              styles.addGoalHeaderBtn,
-              { borderColor: primary, opacity: pressed ? 0.85 : 1 },
-            ]}>
-            <Ionicons name="add" size={20} color={primary} />
-            <ThemedText style={[styles.addGoalHeaderBtnText, { color: primary }]}>Add Goal</ThemedText>
-          </Pressable>
+            leftAccessory={<Ionicons name="add" size={20} color={primary} />}
+            style={[styles.addGoalHeaderBtn, { height: 44, borderColor: primary }]}
+            textStyle={[styles.addGoalHeaderBtnText, { color: primary }]}
+          />
         </View>
 
         <View style={[styles.availableStrip, { backgroundColor: card, borderColor: border }]}>
           <ThemedText style={[styles.availableStripText, { color: muted }]}>
             Available to allocate:{' '}
             <CurrencyText
-              amountUsd={netBalance}
+              amountUsd={availableToAllocateUsd}
               style={{ color: text, fontFamily: Fonts.bold, fontSize: 15 }}
             />
           </ThemedText>
         </View>
 
-        <View style={[styles.bento, isWide && styles.bentoRow]}>
-          <View style={[styles.bentoMain, isWide && styles.bentoMainWide]}>
-            {hasGoals && primaryGoal ? (
-              <ActiveGoalCard
-                goal={{
-                  title: primaryGoal.title,
-                  target_amount: Number(primaryGoal.target_amount) || 0,
-                  saved_amount: Number(primaryGoal.saved_amount) || 0,
-                }}
-                cardBg={card}
-                border={border}
-                text={text}
-                muted={muted}
-                primary={primary}
-                trackBg={trackBg}
-                showAddButton={Boolean(primaryGoal.id)}
-                onAddToGoal={
-                  primaryGoal.id
-                    ? () => openAllocate(String(primaryGoal.id), primaryGoal.title)
-                    : undefined
-                }
-              />
-            ) : hasGoals && !primaryGoal ? (
-              <AllGoalsCompletedHero cardBg={card} border={border} text={text} muted={muted} isDark={isDark} />
-            ) : (
-              <GoalsEmptyState
-                cardBg={card}
-                border={border}
-                text={text}
-                muted={muted}
-                primary={primary}
-                onAddGoal={() => setCreateModalVisible(true)}
-              />
-            )}
-          </View>
-          <View style={[styles.bentoSide, isWide && styles.bentoSideWide]}>
-            <MonthlyBudgetRing
-              budget={monthlyBudget || 2500}
-              totalExpenses={totalExpenses}
-              cardBg={budgetCardBg}
+        <SetMonthlyBudgetCard />
+
+        <View style={styles.bento}>
+          {hasGoals && primaryGoal ? (
+            <ActiveGoalCard
+              goal={{
+                title: primaryGoal.title,
+                target_amount: Number(primaryGoal.target_amount) || 0,
+                saved_amount: Number(primaryGoal.saved_amount) || 0,
+              }}
+              cardBg={card}
               border={border}
               text={text}
               muted={muted}
               primary={primary}
               trackBg={trackBg}
+              showAddButton={Boolean(primaryGoal.id)}
+              onAddToGoal={
+                primaryGoal.id
+                  ? () => openAllocate(String(primaryGoal.id), primaryGoal.title)
+                  : undefined
+              }
             />
-          </View>
+          ) : hasGoals && !primaryGoal ? (
+            <AllGoalsCompletedHero cardBg={card} border={border} text={text} muted={muted} isDark={isDark} />
+          ) : (
+            <GoalsEmptyState
+              cardBg={card}
+              border={border}
+              text={text}
+              muted={muted}
+              primary={primary}
+              onAddGoal={() => setCreateModalVisible(true)}
+            />
+          )}
         </View>
 
         {milestoneGoals.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHead}>
               <ThemedText style={[styles.sectionTitle, { color: text }]}>Upcoming milestones</ThemedText>
-              <Pressable onPress={() => router.push('/(tabs)/transaction')}>
+              <Pressable onPress={() => router.push('/goals-overview')}>
                 <ThemedText style={[styles.viewAll, { color: primary }]}>View all</ThemedText>
               </Pressable>
             </View>
@@ -613,6 +541,9 @@ export default function ChallengesScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHead}>
               <ThemedText style={[styles.sectionTitle, { color: text }]}>Completed goals</ThemedText>
+              <Pressable onPress={() => router.push('/goals-overview')}>
+                <ThemedText style={[styles.viewAll, { color: primary }]}>View all</ThemedText>
+              </Pressable>
             </View>
             <View style={styles.milestoneList}>
               {completedGoals.map((g, i) => (
@@ -658,7 +589,7 @@ export default function ChallengesScreen() {
         visible={allocateTarget !== null}
         goalId={allocateTarget?.id ?? ''}
         goalTitle={allocateTarget?.title ?? ''}
-        availableBalanceUsd={netBalance}
+        availableBalanceUsd={availableToAllocateUsd}
         onClose={() => setAllocateTarget(null)}
         onAllocate={handleAllocate}
       />
@@ -668,8 +599,11 @@ export default function ChallengesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  headerWrap: { paddingHorizontal: 20, paddingTop: 8, marginBottom: 28 },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120, gap: 28 },
+  content: { paddingHorizontal: 20, paddingTop: 0, paddingBottom: 120, gap: 28 },
+  /** Lets pull-to-refresh work when content is shorter than the screen (iOS needs bounce). */
+  scrollContentGrow: { flexGrow: 1 },
   pageTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -681,14 +615,9 @@ const styles = StyleSheet.create({
   pageTitle: { fontSize: 28, lineHeight: 34, letterSpacing: -0.3 },
   pageSubtitle: { fontSize: 14, lineHeight: 20, fontFamily: Fonts.sans },
   addGoalHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1.5,
     marginTop: 2,
+    borderRadius: 999,
+    paddingHorizontal: 4,
   },
   addGoalHeaderBtnText: { fontFamily: Fonts.bold, fontSize: 14 },
   availableStrip: {
@@ -717,11 +646,6 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontFamily: Fonts.sans, fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 8 },
   emptyPrimaryBtn: { alignSelf: 'stretch', width: '100%' },
   bento: { gap: 16 },
-  bentoRow: { flexDirection: 'row', alignItems: 'stretch', gap: 16 },
-  bentoMain: { flex: 1 },
-  bentoMainWide: { flex: 1.6, minWidth: 0 },
-  bentoSide: { flex: 1 },
-  bentoSideWide: { flex: 1, minWidth: 0, maxWidth: 320 },
   goalCard: {
     borderRadius: 24,
     borderWidth: 1,
@@ -767,11 +691,9 @@ const styles = StyleSheet.create({
   addToGoalBtnFilled: {
     marginTop: 16,
     alignSelf: 'stretch',
-    paddingVertical: 14,
+    height: 52,
     paddingHorizontal: 18,
     borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   addToGoalBtnTextFilled: {
     fontFamily: Fonts.bold,
@@ -780,26 +702,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: '#FFFFFF',
   },
-  budgetCard: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 24,
-    alignItems: 'center',
-  },
-  budgetEyebrow: {
-    fontFamily: Fonts.bold,
-    fontSize: 11,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  ringWrap: { width: 124, height: 124, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  ringSvg: { position: 'absolute' },
-  ringCenter: { alignItems: 'center', justifyContent: 'center' },
-  ringPct: { fontFamily: Fonts.bold, fontSize: 28, letterSpacing: -0.5 },
-  ringLabel: { fontFamily: Fonts.semiBold, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2 },
-  budgetFoot: { fontSize: 14, lineHeight: 22, textAlign: 'center', fontFamily: Fonts.sans },
   section: { gap: 16 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontFamily: Fonts.bold, fontSize: 18 },
@@ -825,7 +727,7 @@ const styles = StyleSheet.create({
   milestoneAddBtnFilled: {
     alignSelf: 'flex-start',
     marginTop: 10,
-    paddingVertical: 8,
+    height: 38,
     paddingHorizontal: 14,
     borderRadius: 999,
   },
@@ -892,9 +794,15 @@ const styles = StyleSheet.create({
   insightBody: { fontSize: 14, lineHeight: 22, fontFamily: Fonts.sans, marginBottom: 14 },
   insightCta: {
     alignSelf: 'flex-start',
+    height: 40,
     paddingHorizontal: 22,
-    paddingVertical: 11,
     borderRadius: 999,
   },
-  insightCtaText: { fontFamily: Fonts.bold, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  insightCtaText: {
+    fontFamily: Fonts.bold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: '#FFFFFF',
+  },
 });

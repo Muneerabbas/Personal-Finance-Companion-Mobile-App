@@ -8,6 +8,7 @@ import { Slide1 } from '@/components/onboarding/Slide1';
 import { Slide2 } from '@/components/onboarding/Slide2';
 import { Slide3 } from '@/components/onboarding/Slide3';
 import { Slide4 } from '@/components/onboarding/Slide4';
+import PrimaryButton from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { getOnboardingColors } from '@/constants/onboarding-theme';
 import { Colors } from '@/constants/theme';
@@ -95,14 +96,17 @@ export default function Onboarding() {
               ))}
             </View>
 
-            <Pressable style={[styles.button, { backgroundColor: theme.primary }]} onPress={handleNext}>
-              <ThemedText style={styles.buttonText}>
-                {currentIndex === 0 ? 'Get Started' : 'Continue'}
-              </ThemedText>
-              {(currentIndex === 0 || currentIndex === 2) && (
-                <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
-              )}
-            </Pressable>
+            <PrimaryButton
+              title={currentIndex === 0 ? 'Get Started' : 'Continue'}
+              onPress={handleNext}
+              style={[styles.footerPrimaryButton, { backgroundColor: theme.primary }]}
+              textStyle={styles.footerPrimaryButtonText}
+              rightAccessory={
+                currentIndex === 0 || currentIndex === 2 ? (
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                ) : undefined
+              }
+            />
           </View>
         ) : null}
       </View>
@@ -166,19 +170,13 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  button: {
+  footerPrimaryButton: {
     height: 56,
     borderRadius: 28,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  buttonText: {
+  footerPrimaryButtonText: {
     color: '#fff',
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
-  },
-  buttonIcon: {
-    marginLeft: 8,
   },
 });

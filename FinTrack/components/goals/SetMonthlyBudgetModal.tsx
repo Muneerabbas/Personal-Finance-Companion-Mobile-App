@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Keyboard, Modal, Platform, Pressable, StyleSheet, TextInput, View, type KeyboardEvent } from 'react-native';
+import {
+  Keyboard,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+  type KeyboardEvent,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CurrencyText } from '@/components/currency-text';
@@ -8,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
 import { useCurrency } from '@/context/currency-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useStore } from '@/store/useStore';
 
 function parseAmount(raw: string) {
   const cleaned = raw.replace(/[^0-9.]/g, '');
@@ -15,24 +25,14 @@ function parseAmount(raw: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
-type AddToGoalModalProps = {
+const FALLBACK_BUDGET_USD = 2500;
+
+type SetMonthlyBudgetModalProps = {
   visible: boolean;
-  goalTitle: string;
-  goalId: string;
-  /** Net balance in USD (stored amounts) */
-  availableBalanceUsd: number;
   onClose: () => void;
-  onAllocate: (amountUsd: number) => Promise<void>;
 };
 
-export default function AddToGoalModal({
-  visible,
-  goalTitle,
-  goalId,
-  availableBalanceUsd,
-  onClose,
-  onAllocate,
-}: AddToGoalModalProps) {
+export default function SetMonthlyBudgetModal({ visible, onClose }: SetMonthlyBudgetModalProps) {
   const inputRef = useRef<TextInput>(null);
   const [amountText, setAmountText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +40,18 @@ export default function AddToGoalModal({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const insets = useSafeAreaInsets();
 
+  const monthlyBudget = useStore((state) => state.monthlyBudget);
+  const setBudget = useStore((state) => state.setBudget);
   const { convertDisplayToUsd, currencySymbol } = useCurrency();
+
   const card = useThemeColor({}, 'card');
   const border = useThemeColor({}, 'border');
   const text = useThemeColor({}, 'text');
   const muted = useThemeColor({}, 'muted');
   const background = useThemeColor({}, 'background');
+
+  const hasSavedBudget = monthlyBudget != null;
+  const effectiveUsd = monthlyBudget || FALLBACK_BUDGET_USD;
 
   useEffect(() => {
     if (visible) {
@@ -56,7 +62,7 @@ export default function AddToGoalModal({
       return () => clearTimeout(t);
     }
     setKeyboardHeight(0);
-  }, [visible, goalId]);
+  }, [visible]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -75,30 +81,27 @@ export default function AddToGoalModal({
     };
   }, []);
 
-  const amountUsdPreview = convertDisplayToUsd(parseAmount(amountText));
-  const exceedsBalance = amountUsdPreview > availableBalanceUsd + 1e-6;
-  const canSubmit =
-    parseAmount(amountText) > 0 && !exceedsBalance && !submitting && availableBalanceUsd > 0;
+  const displayVal = parseAmount(amountText);
+  const canSubmit = displayVal > 0 && !submitting;
 
-  const handleAllocate = async () => {
+  const handleSave = async () => {
     setError(null);
-    const displayVal = parseAmount(amountText);
     if (displayVal <= 0) {
-      setError('Enter an amount greater than zero.');
+      setError('Enter a monthly budget greater than zero.');
       return;
     }
     const usd = convertDisplayToUsd(displayVal);
-    if (usd > availableBalanceUsd + 1e-6) {
-      setError('Insufficient balance');
+    if (usd <= 0) {
+      setError('Enter a valid amount.');
       return;
     }
     setSubmitting(true);
     try {
-      await onAllocate(usd);
+      await setBudget(usd);
       onClose();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong';
-      setError(msg === 'Insufficient balance' ? 'Insufficient balance' : msg);
+      const msg = e instanceof Error ? e.message : 'Could not save budget';
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -141,23 +144,21 @@ export default function AddToGoalModal({
             ]}>
             <View style={[styles.handlePill, { backgroundColor: border }]} />
             <View style={styles.sheetBody}>
-              <ThemedText style={[styles.title, { color: text }]}>Add Funds</ThemedText>
-              <ThemedText style={[styles.subtitle, { color: muted }]} numberOfLines={2}>
-                {goalTitle}
+              <ThemedText style={[styles.title, { color: text }]}>Monthly budget</ThemedText>
+              <ThemedText style={[styles.subtitle, { color: muted }]} numberOfLines={3}>
+                Sets your monthly spending limit .
               </ThemedText>
 
-              <ThemedText style={[styles.balanceLabel, { color: muted }]}>
-                Available balance:{' '}
+              <View style={styles.currentRow}>
+                <ThemedText style={[styles.balanceLabel, { color: muted }]}>Current limit: </ThemedText>
                 <CurrencyText
-                  amountUsd={availableBalanceUsd}
-                  style={{ color: text, fontFamily: Fonts.semiBold }}
+                  amountUsd={effectiveUsd}
+                  style={{ color: text, fontFamily: Fonts.semiBold, fontSize: 14 }}
                 />
-              </ThemedText>
-              {availableBalanceUsd <= 0 ? (
-                <ThemedText style={[styles.hint, { color: muted }]}>
-                  Add income or reduce expenses to build a positive balance before allocating to goals.
-                </ThemedText>
-              ) : null}
+                {!hasSavedBudget ? (
+                  <ThemedText style={[styles.balanceLabel, { color: muted }]}> (default)</ThemedText>
+                ) : null}
+              </View>
 
               <TextInput
                 ref={inputRef}
@@ -185,7 +186,7 @@ export default function AddToGoalModal({
                 </ThemedText>
               ) : null}
 
-              <PrimaryButton title="Allocate" onPress={handleAllocate} disabled={!canSubmit} loading={submitting} />
+              <PrimaryButton title="Save budget" onPress={handleSave} disabled={!canSubmit} loading={submitting} />
 
               <Pressable onPress={closeIfAllowed} style={styles.cancelBtn} hitSlop={12}>
                 <ThemedText style={[styles.cancelText, { color: muted }]}>Cancel</ThemedText>
@@ -204,7 +205,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  /** Lifts the sheet by live keyboard height (KAV is unreliable inside transparent Modal). */
   sheetLift: {
     width: '100%',
     maxHeight: '88%',
@@ -241,15 +241,16 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: -4,
   },
+  currentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
   balanceLabel: {
     fontFamily: Fonts.sans,
     fontSize: 14,
-    marginTop: 4,
-  },
-  hint: {
-    fontFamily: Fonts.sans,
-    fontSize: 13,
-    lineHeight: 18,
   },
   input: {
     fontFamily: Fonts.semiBold,

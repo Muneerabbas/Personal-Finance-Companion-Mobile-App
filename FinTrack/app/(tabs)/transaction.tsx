@@ -1,6 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import TransactionDetailModal from '@/components/home/TransactionDetailModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,6 +20,7 @@ import AppHeader from '@/components/layout/AppHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import {
   getCategoryDisplayLabel,
   GOAL_ALLOCATION_DISPLAY_LABEL,
@@ -156,6 +167,7 @@ function filterLabel(value: TransactionFilter) {
 
 export default function TransactionScreen() {
   const transactions = useStore(state => state.transactions);
+  const refreshAllData = useStore(state => state.refreshAllData);
   const colorScheme = useColorScheme() ?? 'dark';
   const theme = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
@@ -164,6 +176,10 @@ export default function TransactionScreen() {
   const deferredSearchText = useDeferredValue(searchText);
   const normalizedQuery = deferredSearchText.trim().toLowerCase();
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [listSlotHeight, setListSlotHeight] = useState(0);
+  const { height: windowHeight } = useWindowDimensions();
+
+  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
 
   const handleTxPress = useCallback((item: Transaction) => {
     setSelectedTx(item);
@@ -178,209 +194,228 @@ export default function TransactionScreen() {
     [transactions, filter, normalizedQuery],
   );
 
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#0E1220' : theme.background }]} edges={['top']}>
-      <ScrollView
-        style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <AppHeader />
-        <View
-          style={[
-            styles.searchWrap,
-            {
-              backgroundColor: isDark ? '#171C28' : '#FFFFFF',
-              borderColor: isDark ? '#3B4558' : theme.border,
-            },
-          ]}>
-          <Ionicons name="search" size={18} color={isDark ? '#A8B3C8' : theme.muted} />
-          <TextInput
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Search transactions..."
-            placeholderTextColor={isDark ? '#9AA4B8' : theme.muted}
-            style={[styles.searchInput, { color: isDark ? '#EBEDFB' : theme.text }]}
-          />
+  const refreshControlEl = (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor={theme.primary}
+      colors={[theme.primary]}
+      progressBackgroundColor={isDark ? '#171C28' : theme.card}
+    />
+  );
+
+  const renderSection = useCallback(
+    ({ item: section, index: sectionIndex }: { item: TransactionSection; index: number }) => (
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeader}>
+          <ThemedText style={[styles.sectionTitle, { color: isDark ? '#F3F6FF' : theme.text }]}>
+            {sectionIndex === 0 ? 'Recent Activity' : section.title}
+          </ThemedText>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterContent}
-          style={styles.filterScroll}>
-          {(['all', 'income', 'expense'] as const).map((value) => {
-            const active = filter === value;
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: isDark ? '#1C2230' : '#FFFFFF',
+              borderColor: isDark ? '#2E3748' : theme.border,
+            },
+          ]}>
+          {section.data.map((item, index) => {
+            const isExpense = item.amount < 0;
+            const isGoalAllocation = isGoalAllocationCategory(item.category);
+            const accentColor = isGoalAllocation
+              ? isDark
+                ? '#A78BFA'
+                : item.iconColor || '#6D28D9'
+              : isExpense
+                ? isDark
+                  ? '#F3AAA1'
+                  : '#DC6B5F'
+                : isDark
+                  ? '#86E2B8'
+                  : '#1FA971';
             return (
-              <Pressable
-                key={value}
-                onPress={() => setFilter(value)}
-                style={[
-                  styles.filterPill,
-                  {
-                    backgroundColor: active
-                      ? isDark
-                        ? '#92EEFF'
-                        : '#E8ECFF'
-                      : isDark
-                        ? '#232938'
-                        : '#E9ECF3',
-                  },
-                ]}>
-                <ThemedText
-                  style={[
-                    styles.filterLabel,
-                    {
-                      color: active
-                        ? isDark
-                          ? '#082A35'
-                          : '#3949AB'
-                        : isDark
-                          ? '#E2E7F2'
-                          : theme.muted,
-                    },
-                  ]}>
-                  {filterLabel(value)}
-                </ThemedText>
+              <Pressable key={item.id} onPress={() => handleTxPress(item)} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+                <View style={styles.row}>
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      {
+                        backgroundColor: item.isOtherCategory
+                          ? isDark
+                            ? '#2A3143'
+                            : '#E8E8ED'
+                          : item.iconBackground,
+                      },
+                    ]}>
+                    <Ionicons
+                      name={iconNameForTransaction(item)}
+                      size={22}
+                      color={
+                        item.isOtherCategory
+                          ? isDark
+                            ? '#9CA3AF'
+                            : '#6B7280'
+                          : item.iconColor
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.meta}>
+                    <ThemedText style={[styles.title, { color: isDark ? '#F2F5FD' : theme.text }]} numberOfLines={1}>
+                      {item.title}
+                    </ThemedText>
+                    <ThemedText style={[styles.metaLine, { color: isDark ? '#B7BECE' : theme.muted }]} numberOfLines={1}>
+                      {`${item.timeLabel} • ${getCategoryDisplayLabel(item.category)}`}
+                    </ThemedText>
+                  </View>
+
+                  <View style={styles.amountWrap}>
+                    <CurrencyText
+                      amountUsd={item.amount}
+                      signed
+                      numberOfLines={1}
+                      style={[styles.amount, { color: accentColor }]}
+                    />
+                    <View style={styles.typeRow}>
+                      <View style={[styles.typeDot, { backgroundColor: accentColor }]} />
+                      <ThemedText style={[styles.typeLabel, { color: isDark ? '#B7BECE' : theme.muted }]}>
+                        {isGoalAllocation ? 'GOAL' : isExpense ? 'EXPENSE' : 'INCOME'}
+                      </ThemedText>
+                    </View>
+                  </View>
+                </View>
+
+                {index < section.data.length - 1 ? (
+                  <View style={[styles.divider, { backgroundColor: isDark ? '#2D3546' : '#EDF1F5' }]} />
+                ) : null}
               </Pressable>
             );
           })}
-        </ScrollView>
+        </View>
+      </View>
+    ),
+    [handleTxPress, isDark, theme.text, theme.muted],
+  );
 
-        {sections.length ? (
-          sections.map((section, sectionIndex) => (
-            <View key={section.id} style={styles.sectionBlock}>
-              <View style={styles.sectionHeader}>
-                <ThemedText style={[styles.sectionTitle, { color: isDark ? '#F3F6FF' : theme.text }]}>
-                  {sectionIndex === 0 ? 'Recent Activity' : section.title}
-                </ThemedText>
-              </View>
+  const onListSlotLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    setListSlotHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h));
+  }, []);
 
-              <View
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: isDark ? '#1C2230' : '#FFFFFF',
-                    borderColor: isDark ? '#2E3748' : theme.border,
-                  },
-                ]}>
-                {section.data.map((item, index) => {
-                  const isExpense = item.amount < 0;
-                  const isGoalAllocation = isGoalAllocationCategory(item.category);
-                  const accentColor = isGoalAllocation
-                    ? isDark
-                      ? '#A78BFA'
-                      : item.iconColor || '#6D28D9'
-                    : isExpense
-                      ? isDark
-                        ? '#F3AAA1'
-                        : '#DC6B5F'
-                      : isDark
-                        ? '#86E2B8'
-                        : '#1FA971';
-                  return (
-                    <Pressable key={item.id} onPress={() => handleTxPress(item)} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
-                      <View style={styles.row}>
-                        <View
-                          style={[
-                            styles.iconWrap,
-                            {
-                              backgroundColor: item.isOtherCategory
-                                ? isDark
-                                  ? '#2A3143'
-                                  : '#E8E8ED'
-                                : item.iconBackground,
-                            },
-                          ]}>
-                          <Ionicons
-                            name={iconNameForTransaction(item)}
-                            size={22}
-                            color={
-                              item.isOtherCategory
-                                ? isDark
-                                  ? '#9CA3AF'
-                                  : '#6B7280'
-                                : item.iconColor
-                            }
-                          />
-                        </View>
+  const emptyScrollMinHeight = listSlotHeight > 0 ? listSlotHeight : Math.max(320, windowHeight * 0.55);
 
-                        <View style={styles.meta}>
-                          <ThemedText
-                            style={[styles.title, { color: isDark ? '#F2F5FD' : theme.text }]}
-                            numberOfLines={1}>
-                            {item.title}
-                          </ThemedText>
-                          <ThemedText
-                            style={[styles.metaLine, { color: isDark ? '#B7BECE' : theme.muted }]}
-                            numberOfLines={1}>
-                            {`${item.timeLabel} • ${getCategoryDisplayLabel(item.category)}`}
-                          </ThemedText>
-                        </View>
-
-                        <View style={styles.amountWrap}>
-                          <CurrencyText
-                            amountUsd={item.amount}
-                            signed
-                            numberOfLines={1}
-                            style={[
-                              styles.amount,
-                              { color: accentColor },
-                            ]}
-                          />
-                          <View style={styles.typeRow}>
-                            <View
-                              style={[
-                                styles.typeDot,
-                                { backgroundColor: accentColor },
-                              ]}
-                            />
-                            <ThemedText
-                              style={[styles.typeLabel, { color: isDark ? '#B7BECE' : theme.muted }]}>
-                              {isGoalAllocation ? 'GOAL' : isExpense ? 'EXPENSE' : 'INCOME'}
-                            </ThemedText>
-                          </View>
-                        </View>
-                      </View>
-
-                      {index < section.data.length - 1 ? (
-                        <View
-                          style={[
-                            styles.divider,
-                            { backgroundColor: isDark ? '#2D3546' : '#EDF1F5' },
-                          ]}
-                        />
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ))
-        ) : (
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#0E1220' : theme.background }]} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <AppHeader />
+      </View>
+      <View style={styles.listColumn}>
+        <View style={styles.topControls}>
           <View
             style={[
-              styles.emptyCard,
+              styles.searchWrap,
               {
-                backgroundColor: isDark ? '#1C2230' : '#FFFFFF',
-                borderColor: isDark ? '#2E3748' : theme.border,
+                backgroundColor: isDark ? '#171C28' : '#FFFFFF',
+                borderColor: isDark ? '#3B4558' : theme.border,
               },
             ]}>
-            <Ionicons name="receipt-outline" size={28} color={isDark ? '#A8B3C8' : theme.muted} />
-            <ThemedText style={[styles.emptyTitle, { color: isDark ? '#F2F5FD' : theme.text }]}>
-              No transactions found
-            </ThemedText>
-            <ThemedText style={[styles.emptyBody, { color: isDark ? '#B7BECE' : theme.muted }]}>
-              Try a different search or filter.
-            </ThemedText>
+            <Ionicons name="search" size={18} color={isDark ? '#A8B3C8' : theme.muted} />
+            <TextInput
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Search transactions..."
+              placeholderTextColor={isDark ? '#9AA4B8' : theme.muted}
+              style={[styles.searchInput, { color: isDark ? '#EBEDFB' : theme.text }]}
+            />
           </View>
-        )}
 
-        <TransactionDetailModal
-          visible={selectedTx !== null}
-          transaction={selectedTx}
-          onClose={handleModalClose}
-        />
-      </ScrollView>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterContent}
+            style={styles.filterScroll}
+            keyboardShouldPersistTaps="handled">
+            {(['all', 'income', 'expense'] as const).map((value) => {
+              const active = filter === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => setFilter(value)}
+                  style={[
+                    styles.filterPill,
+                    {
+                      backgroundColor: active
+                        ? isDark
+                          ? '#92EEFF'
+                          : '#E8ECFF'
+                        : isDark
+                          ? '#232938'
+                          : '#E9ECF3',
+                    },
+                  ]}>
+                  <ThemedText
+                    style={[
+                      styles.filterLabel,
+                      {
+                        color: active
+                          ? isDark
+                            ? '#082A35'
+                            : '#3949AB'
+                          : isDark
+                            ? '#E2E7F2'
+                            : theme.muted,
+                      },
+                    ]}>
+                    {filterLabel(value)}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.listSlot} onLayout={onListSlotLayout}>
+          {sections.length > 0 ? (
+            <FlatList
+              data={sections}
+              keyExtractor={(s) => s.id}
+              renderItem={renderSection}
+              contentContainerStyle={styles.listContent}
+              style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={refreshControlEl}
+            />
+          ) : (
+            <ScrollView
+              style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
+              contentContainerStyle={[styles.emptyScrollContent, { minHeight: emptyScrollMinHeight }]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={refreshControlEl}>
+              <View style={styles.emptyCenterBlock}>
+                <View
+                  style={[
+                    styles.emptyCard,
+                    {
+                      backgroundColor: isDark ? '#1C2230' : '#FFFFFF',
+                      borderColor: isDark ? '#2E3748' : theme.border,
+                    },
+                  ]}>
+                  <Ionicons name="receipt-outline" size={28} color={isDark ? '#A8B3C8' : theme.muted} />
+                  <ThemedText style={[styles.emptyTitle, { color: isDark ? '#F2F5FD' : theme.text }]}>
+                    No transactions found
+                  </ThemedText>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </View>
+
+      <TransactionDetailModal visible={selectedTx !== null} transaction={selectedTx} onClose={handleModalClose} />
     </SafeAreaView>
   );
 }
@@ -392,11 +427,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  headerWrap: {
     paddingHorizontal: 16,
     paddingTop: 14,
+    marginBottom: 16,
+  },
+  listColumn: {
+    flex: 1,
+    minHeight: 0,
+  },
+  listSlot: {
+    flex: 1,
+    minHeight: 0,
+  },
+  topControls: {
+    paddingHorizontal: 16,
+  },
+  listContent: {
+    paddingHorizontal: 16,
     paddingBottom: 120,
-    gap: 16,
+  },
+  emptyScrollContent: {
+    flexGrow: 1,
+  },
+  emptyCenterBlock: {
+    flexGrow: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+    paddingTop: 8,
   },
   searchWrap: {
     height: 60,
@@ -510,22 +571,20 @@ const styles = StyleSheet.create({
     marginLeft: 62,
   },
   emptyCard: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
     borderRadius: 18,
     borderWidth: 1,
     paddingHorizontal: 24,
     paddingVertical: 32,
     alignItems: 'center',
-    marginTop: 12,
   },
   emptyTitle: {
     fontFamily: Fonts.bold,
     fontSize: 18,
     marginTop: 12,
-    marginBottom: 6,
-  },
-  emptyBody: {
-    fontFamily: Fonts.sans,
-    fontSize: 14,
     textAlign: 'center',
+    width: '100%',
   },
 });

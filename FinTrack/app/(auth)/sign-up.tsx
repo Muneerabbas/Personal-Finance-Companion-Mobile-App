@@ -7,6 +7,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import PrimaryButton from '@/components/ui/primary-button';
 
 export default function SignUp() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,13 +16,26 @@ export default function SignUp() {
   const colors = Colors[theme];
 
   async function signUpWithEmail() {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      Alert.alert('Name', 'Please enter your name.');
+      return;
+    }
     setLoading(true);
+    const firstName = trimmedName.split(/\s+/)[0] || trimmedName;
     const {
       data: { session },
       error,
     } = await supabase.auth.signUp({
-      email: email,
+      email: email.trim(),
       password: password,
+      options: {
+        data: {
+          full_name: trimmedName,
+          first_name: firstName,
+          name: trimmedName,
+        },
+      },
     });
 
     if (error) {
@@ -47,6 +61,20 @@ export default function SignUp() {
         <Text style={[styles.subtitle, { color: colors.muted, fontFamily: Fonts.sans }]}>Sign up to start tracking your finances</Text>
 
         <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: colors.text, fontFamily: Fonts.rounded }]}>Name</Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card, fontFamily: Fonts.sans }]}
+            onChangeText={setName}
+            value={name}
+            placeholder="Your name"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="words"
+            autoCorrect={false}
+            textContentType="name"
+          />
+        </View>
+
+        <View style={[styles.inputContainer, styles.mt20]}>
           <Text style={[styles.label, { color: colors.text, fontFamily: Fonts.rounded }]}>Email</Text>
           <TextInput
             style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card, fontFamily: Fonts.sans }]}

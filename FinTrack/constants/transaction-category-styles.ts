@@ -12,6 +12,11 @@ export function isGoalAllocationCategory(category: string): boolean {
   return category === GOAL_SAVING_CATEGORY;
 }
 
+/** Outflows that count as discretionary spending (budget, insights, category charts). Excludes goal allocations. */
+export function isSpendingExpense(tx: { amount: number; category?: string | null }): boolean {
+  return tx.amount < 0 && !isGoalAllocationCategory(String(tx.category ?? ''));
+}
+
 export function getCategoryDisplayLabel(category: string): string {
   if (isGoalAllocationCategory(category)) return GOAL_ALLOCATION_DISPLAY_LABEL;
   return category;
