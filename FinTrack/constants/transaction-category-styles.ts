@@ -2,6 +2,9 @@ import type { Transaction } from '@/components/home/TransactionItem';
 
 export const OTHER_CATEGORY_LABEL = 'Other';
 
+/** Expense category for allocations moved from balance into a savings goal */
+export const GOAL_SAVING_CATEGORY = 'goal_saving';
+
 type Visual = Pick<Transaction, 'icon' | 'iconBackground' | 'iconColor'>;
 
 const otherVisual: Visual = {
@@ -35,6 +38,11 @@ const expenseMap: Record<string, Visual> = {
   'Rent & Housing': { icon: 'home-outline', iconBackground: '#EDE9FE', iconColor: '#6D28D9' },
   Shopping: { icon: 'cart-outline', iconBackground: '#FFF7ED', iconColor: '#EA580C' },
   Travel: { icon: 'airplane', iconBackground: '#E0F2FE', iconColor: '#0284C7' },
+  [GOAL_SAVING_CATEGORY]: {
+    icon: 'flag',
+    iconBackground: '#EDE9FE',
+    iconColor: '#6D28D9',
+  },
   Other: otherVisual,
 };
 

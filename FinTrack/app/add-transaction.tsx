@@ -101,15 +101,19 @@ export default function AddTransactionScreen() {
       note: description,
       wallet: walletLabel,
     });
-    
-    await addTransaction(payload);
-    setTimeout(() => {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)');
-      }
-    }, 0);
+
+    try {
+      await addTransaction(payload);
+      setTimeout(() => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(tabs)');
+        }
+      }, 0);
+    } catch {
+      Alert.alert('Could not save', 'Please try again.');
+    }
   };
 
   const getHeaderColor = () => {

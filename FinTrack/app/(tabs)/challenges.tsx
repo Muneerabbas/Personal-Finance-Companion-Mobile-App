@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
+import AddToGoalModal from '@/components/goals/AddToGoalModal';
 import { CurrencyText } from '@/components/currency-text';
 import AppHeader from '@/components/layout/AppHeader';
 import { ThemedText } from '@/components/themed-text';
@@ -35,6 +36,8 @@ function ActiveGoalCard({
   muted,
   primary,
   trackBg,
+  showAddButton,
+  onAddToGoal,
 }: {
   goal: { title: string; target_amount: number; saved_amount: number };
   cardBg: string;
@@ -43,6 +46,8 @@ function ActiveGoalCard({
   muted: string;
   primary: string;
   trackBg: string;
+  showAddButton: boolean;
+  onAddToGoal?: () => void;
 }) {
   const progress = goal.target_amount ? goal.saved_amount / goal.target_amount : 0;
   const pct = Math.min(100, Math.round(progress * 100));
@@ -84,6 +89,18 @@ function ActiveGoalCard({
             <Ionicons name="trending-up" size={20} color={primary} />
           </View>
         </View>
+        {showAddButton && onAddToGoal ? (
+          <Pressable
+            onPress={onAddToGoal}
+            accessibilityRole="button"
+            accessibilityLabel="Add money to this goal"
+            style={({ pressed }) => [
+              styles.addToGoalBtn,
+              { borderColor: primary, opacity: pressed ? 0.88 : 1 },
+            ]}>
+            <ThemedText style={[styles.addToGoalBtnText, { color: primary }]}>Add to goal</ThemedText>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -162,6 +179,8 @@ function MilestoneRow({
   muted,
   primary,
   trackBg,
+  showAddButton,
+  onAddToGoal,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
@@ -174,15 +193,12 @@ function MilestoneRow({
   muted: string;
   primary: string;
   trackBg: string;
+  showAddButton: boolean;
+  onAddToGoal?: () => void;
 }) {
   const accent = usePrimaryAccent ? primary : TERTIARY_ACCENT;
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.milestoneRow,
-        { backgroundColor: cardBg, borderColor: border },
-        pressed && { opacity: 0.92 },
-      ]}>
+    <View style={[styles.milestoneRow, { backgroundColor: cardBg, borderColor: border }]}>
       <View style={[styles.milestoneIcon, { backgroundColor: trackBg }]}>
         <Ionicons name={icon} size={22} color={accent} />
       </View>
@@ -194,9 +210,14 @@ function MilestoneRow({
         <View style={[styles.milestoneTrack, { backgroundColor: trackBg }]}>
           <View style={[styles.milestoneFill, { width: `${Math.min(100, progress)}%`, backgroundColor: accent }]} />
         </View>
+        {showAddButton && onAddToGoal ? (
+          <Pressable onPress={onAddToGoal} style={styles.milestoneAddBtn} hitSlop={6}>
+            <ThemedText style={[styles.milestoneAddBtnText, { color: primary }]}>Add to goal</ThemedText>
+          </Pressable>
+        ) : null}
       </View>
       <ThemedText style={[styles.milestonePct, { color: accent }]}>{Math.min(100, progress)}%</ThemedText>
-    </Pressable>
+    </View>
   );
 }
 
@@ -268,10 +289,29 @@ export default function ChallengesScreen() {
   const fetchGoals = useStore((state) => state.fetchGoals);
   const monthlyBudget = useStore((state) => state.monthlyBudget);
   const getTotalExpenses = useStore((state) => state.getTotalExpenses);
+  const getNetBalance = useStore((state) => state.getNetBalance);
+  const allocateToGoal = useStore((state) => state.allocateToGoal);
+
+  const [allocateTarget, setAllocateTarget] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     fetchGoals();
   }, [fetchGoals]);
+
+  const netBalance = getNetBalance();
+
+  const openAllocate = useCallback((id: string, title: string) => {
+    setAllocateTarget({ id, title });
+  }, []);
+
+  const handleAllocate = useCallback(
+    async (amountUsd: number) => {
+      if (!allocateTarget) return;
+      await allocateToGoal(allocateTarget.id, amountUsd);
+      Alert.alert('Allocated', `Added to ${allocateTarget.title}.`);
+    },
+    [allocateTarget, allocateToGoal],
+  );
 
   const totalExpenses = getTotalExpenses();
   const primaryGoal = useMemo(() => goals.find((g) => g.is_primary) || goals[0], [goals]);
@@ -291,6 +331,7 @@ export default function ChallengesScreen() {
 
   const displayGoal = primaryGoal || demoGoal;
   const insightTitle = displayGoal.title;
+  const activeGoalHasId = Boolean(primaryGoal?.id);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: background }]} edges={['top']}>
@@ -298,13 +339,7 @@ export default function ChallengesScreen() {
         style={[styles.scroll, { backgroundColor: background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <AppHeader
-          rightAccessory={
-            <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel="Notifications">
-              <Ionicons name="notifications-outline" size={22} color={text} />
-            </Pressable>
-          }
-        />
+        <AppHeader />
 
         <View style={styles.pageTitleBlock}>
           <ThemedText type="title" style={[styles.pageTitle, { color: text }]}>
@@ -325,6 +360,12 @@ export default function ChallengesScreen() {
               muted={muted}
               primary={primary}
               trackBg={trackBg}
+              showAddButton={activeGoalHasId}
+              onAddToGoal={
+                activeGoalHasId && primaryGoal?.id
+                  ? () => openAllocate(String(primaryGoal.id), primaryGoal.title)
+                  : undefined
+              }
             />
           </View>
           <View style={[styles.bentoSide, isWide && styles.bentoSideWide]}>
@@ -366,6 +407,8 @@ export default function ChallengesScreen() {
                     muted={muted}
                     primary={primary}
                     trackBg={trackBg}
+                    showAddButton={Boolean(g.id)}
+                    onAddToGoal={g.id ? () => openAllocate(String(g.id), g.title) : undefined}
                   />
                 );
               })}
@@ -384,6 +427,15 @@ export default function ChallengesScreen() {
           onAdjustBudget={() => router.push('/(tabs)/budget')}
         />
       </ScrollView>
+
+      <AddToGoalModal
+        visible={allocateTarget !== null}
+        goalId={allocateTarget?.id ?? ''}
+        goalTitle={allocateTarget?.title ?? ''}
+        availableBalanceUsd={netBalance}
+        onClose={() => setAllocateTarget(null)}
+        onAllocate={handleAllocate}
+      />
     </SafeAreaView>
   );
 }
@@ -443,6 +495,15 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 999 },
   remainingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', flex: 1, marginRight: 8 },
   remainingStrong: { fontFamily: Fonts.semiBold, fontSize: 14 },
+  addToGoalBtn: {
+    marginTop: 16,
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  addToGoalBtnText: { fontFamily: Fonts.bold, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
   budgetCard: {
     borderRadius: 24,
     borderWidth: 1,
@@ -485,6 +546,8 @@ const styles = StyleSheet.create({
   },
   milestoneMid: { flex: 1, minWidth: 0 },
   milestoneName: { fontFamily: Fonts.bold, fontSize: 15, marginBottom: 8 },
+  milestoneAddBtn: { alignSelf: 'flex-start', marginTop: 10, paddingVertical: 4 },
+  milestoneAddBtnText: { fontFamily: Fonts.bold, fontSize: 12, letterSpacing: 0.6 },
   milestoneTrack: { height: 6, borderRadius: 999, overflow: 'hidden', width: '100%' },
   milestoneFill: { height: '100%', borderRadius: 999 },
   milestonePct: { fontFamily: Fonts.bold, fontSize: 12, minWidth: 36, textAlign: 'right' },

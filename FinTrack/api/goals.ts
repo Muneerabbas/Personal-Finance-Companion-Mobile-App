@@ -49,3 +49,26 @@ export const addGoal = async (payload: any) => {
 
   return data;
 };
+
+export const patchGoalSavedAmount = async (goalId: string, newSavedAmount: number) => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('goals')
+    .update({ saved_amount: newSavedAmount })
+    .eq('id', goalId)
+    .eq('user_id', user.id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating goal saved amount:', error);
+    throw error;
+  }
+
+  return data;
+};

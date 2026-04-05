@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { getTransactions, addTransaction as apiAddTransaction } from '@/api/transactions';
-import { getGoals, addGoal as apiAddGoal } from '@/api/goals';
+import { getGoals, addGoal as apiAddGoal, patchGoalSavedAmount } from '@/api/goals';
 import { getBudget, setBudget as apiSetBudget } from '@/api/budget';
-import type { Transaction } from '@/components/home/TransactionItem';
+import { GOAL_SAVING_CATEGORY } from '@/constants/transaction-category-styles';
+import { createTransactionPayload } from '@/lib/transaction-helper';
 import { supabase } from '@/lib/supabase';
 
 interface AppState {
@@ -16,6 +17,8 @@ interface AppState {
   fetchUser: () => Promise<void>;
   fetchTransactions: () => Promise<void>;
   addTransaction: (payload: any) => Promise<void>;
+  /** Records a goal-saving expense and increases goal.saved_amount when balance allows */
+  allocateToGoal: (goalId: string, amountUsd: number) => Promise<void>;
   fetchGoals: () => Promise<void>;
   addGoal: (payload: any) => Promise<void>;
   fetchBudget: () => Promise<void>;
@@ -65,6 +68,51 @@ export const useStore = create<AppState>((set, get) => ({
       set((state) => ({ transactions: [newTx, ...state.transactions] }));
     } catch (error) {
       console.error(error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  allocateToGoal: async (goalId: string, amountUsd: number) => {
+    const amount = Number(amountUsd);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Enter a valid amount');
+    }
+    const net = get().getNetBalance();
+    if (amount > net + 1e-6) {
+      throw new Error('Insufficient balance');
+    }
+    const goal = get().goals.find((g) => String(g.id) === String(goalId));
+    if (!goal) {
+      throw new Error('Goal not found');
+    }
+
+    const payload = createTransactionPayload({
+      amount,
+      type: 'expense',
+      category: GOAL_SAVING_CATEGORY,
+      note: `Saved for ${goal.title}`,
+      wallet: 'Goals',
+      customCategory: '',
+    });
+
+    set({ loading: true });
+    try {
+      const newTx = await apiAddTransaction(payload);
+      const prevSaved = Number(goal.saved_amount) || 0;
+      const updatedRow = await patchGoalSavedAmount(goalId, prevSaved + amount);
+
+      set((state) => ({
+        transactions: [newTx, ...state.transactions],
+        goals: state.goals.map((g) =>
+          String(g.id) === String(goalId) ? { ...g, ...updatedRow } : g,
+        ),
+      }));
+    } catch (error) {
+      await get().fetchTransactions().catch(() => {});
+      await get().fetchGoals().catch(() => {});
+      throw error;
     } finally {
       set({ loading: false });
     }
