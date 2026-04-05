@@ -28,6 +28,11 @@ function toLocalDateKey(dateStr: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function todayLocalKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Build 7-day window: weekOffset=0 means this week (Mon-Sun containing today) */
 function buildWeekDays(weekOffset: number): { dateKey: string; label: string }[] {
   const today = new Date();
@@ -48,7 +53,7 @@ function buildWeekDays(weekOffset: number): { dateKey: string; label: string }[]
     d.setDate(startMonday.getDate() + i);
     const dayIndex = d.getDay();
     days.push({
-      dateKey: toLocalDateKey(d.toISOString()),
+      dateKey: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
       label: DAY_NAMES[dayIndex],
     });
   }
@@ -78,6 +83,8 @@ export default function HomeScreen() {
   const fetchBudget = useStore(state => state.fetchBudget);
   const monthlyBudget = useStore(state => state.monthlyBudget);
 
+  /** ON: income/expenses for this week through today. OFF: one day at a time (defaults to today). */
+  const [toDateEnabled, setToDateEnabled] = useState(true);
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -86,9 +93,9 @@ export default function HomeScreen() {
     fetchBudget();
   }, []);
 
-  // Reset bar selection when week changes
   const handleWeekChange = useCallback((newOffset: number) => {
     setWeekOffset(newOffset);
+    setToDateEnabled(true);
     setSelectedBarIndex(null);
   }, []);
 
@@ -124,24 +131,83 @@ export default function HomeScreen() {
     });
   }, [weekDays, txByDate]);
 
+  const todayBarIndex = useMemo(() => {
+    const t = todayLocalKey();
+    const i = weekDays.findIndex((d) => d.dateKey === t);
+    return i >= 0 ? i : null;
+  }, [weekDays]);
+
+  /** Default day when “To date” is off but today is not in the visible week */
+  const defaultDayBarIndex = todayBarIndex ?? 6;
+
+  const effectiveEndDateKey = useMemo(() => {
+    const first = weekDays[0]?.dateKey;
+    const last = weekDays[6]?.dateKey;
+    if (!first || !last) return last ?? '';
+    if (weekOffset > 0) return last;
+    const t = todayLocalKey();
+    if (t < first) return first;
+    if (t > last) return last;
+    return t;
+  }, [weekDays, weekOffset]);
+
+  const handleToDateToggle = useCallback(() => {
+    if (toDateEnabled) {
+      setToDateEnabled(false);
+      setSelectedBarIndex(todayBarIndex ?? 6);
+    } else {
+      setToDateEnabled(true);
+      setSelectedBarIndex(null);
+    }
+  }, [toDateEnabled, todayBarIndex]);
+
   // All transactions in this week window
   const weekDateKeys = useMemo(() => new Set(weekDays.map(d => d.dateKey)), [weekDays]);
   const weekTransactions = useMemo(() => {
     return transactions.filter(tx => tx.date && weekDateKeys.has(toLocalDateKey(tx.date)));
   }, [transactions, weekDateKeys]);
 
-  // Handle bar press — toggle selection
-  const handleBarPress = useCallback((index: number) => {
-    setSelectedBarIndex(prev => prev === index ? null : index);
-  }, []);
+  const handleBarPress = useCallback(
+    (index: number) => {
+      if (toDateEnabled) {
+        setToDateEnabled(false);
+        setSelectedBarIndex(index);
+        return;
+      }
+      setSelectedBarIndex((prev) => {
+        if (prev === index) {
+          return defaultDayBarIndex;
+        }
+        return index;
+      });
+    },
+    [toDateEnabled, defaultDayBarIndex],
+  );
 
-  // Determine which transactions to show based on filter
   const filteredTransactions = useMemo(() => {
-    if (selectedBarIndex === null) return weekTransactions;
-    const selectedDateKey = weekDays[selectedBarIndex]?.dateKey;
+    const firstKey = weekDays[0]?.dateKey;
+    if (!firstKey) return weekTransactions;
+
+    if (toDateEnabled) {
+      return weekTransactions.filter((tx) => {
+        if (!tx.date) return false;
+        const k = toLocalDateKey(tx.date);
+        return k >= firstKey && k <= effectiveEndDateKey;
+      });
+    }
+
+    const dayIdx = selectedBarIndex ?? defaultDayBarIndex;
+    const selectedDateKey = weekDays[dayIdx]?.dateKey;
     if (!selectedDateKey) return weekTransactions;
     return weekTransactions.filter(tx => tx.date && toLocalDateKey(tx.date) === selectedDateKey);
-  }, [weekTransactions, selectedBarIndex, weekDays]);
+  }, [
+    weekTransactions,
+    weekDays,
+    toDateEnabled,
+    effectiveEndDateKey,
+    selectedBarIndex,
+    defaultDayBarIndex,
+  ]);
 
   // Compute dashboard metrics based on filtered transactions
   const totalIncome = useMemo(() => {
@@ -164,9 +230,9 @@ export default function HomeScreen() {
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const daysLeftInMonth = Math.max(1, daysInMonth - today.getDate() + 1);
 
-  const safeToSpend = selectedBarIndex !== null
-    ? remainingBudget
-    : remainingBudget / daysLeftInMonth;
+  const safeToSpend = toDateEnabled
+    ? remainingBudget / daysLeftInMonth
+    : remainingBudget;
 
   const potentialSavings = totalIncome - budget;
 
@@ -198,12 +264,14 @@ export default function HomeScreen() {
         <View style={styles.chartSection}>
           <SpendingChart
             data={chartData}
-            selectedIndex={selectedBarIndex}
+            selectedIndex={toDateEnabled ? null : (selectedBarIndex ?? defaultDayBarIndex)}
             onBarPress={handleBarPress}
             weekOffset={weekOffset}
             maxWeekOffset={MAX_WEEK_OFFSET}
             onWeekChange={handleWeekChange}
             weekLabel={weekLabel}
+            toDateEnabled={toDateEnabled}
+            onToDateToggle={handleToDateToggle}
           />
         </View>
 

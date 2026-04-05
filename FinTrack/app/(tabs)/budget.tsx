@@ -131,14 +131,19 @@ export default function BudgetScreen() {
   const monthLabel = getMonthLabel(monthOffset);
   const { start: monthStart, end: monthEnd } = useMemo(() => getMonthRange(monthOffset), [monthOffset]);
 
-  // Filter transactions for the selected month
-  const transactions = useMemo(() => {
+  // Filter transactions for the selected month (calendar month)
+  const monthTransactions = useMemo(() => {
     return allTransactions.filter(tx => {
       if (!tx.date) return false;
       const d = new Date(tx.date);
       return d >= monthStart && d <= monthEnd;
     });
   }, [allTransactions, monthStart, monthEnd]);
+
+  const monthExpenseTransactions = useMemo(
+    () => monthTransactions.filter((transaction) => transaction.amount < 0),
+    [monthTransactions],
+  );
 
   /** Semantic tokens from `constants/theme` via `useThemeColor` (ThemedText uses the same hook for default `text`). */
   const mutedForeground = useThemeColor({}, 'muted');
@@ -148,14 +153,58 @@ export default function BudgetScreen() {
   const backgroundToken = useThemeColor({}, 'background');
   const secondarySurface = useThemeColor({}, 'secondary');
 
+  // Month chunks by calendar day: 1–7, 8–14, 15–21, 22–28, then 29–last (no Mon–Sun alignment)
+  const weekBuckets = useMemo(() => {
+    const y = monthStart.getFullYear();
+    const mo = monthStart.getMonth();
+    const daysInMonth = monthEnd.getDate();
+    const buckets: { start: Date; end: Date; label: string; total: number }[] = [];
+
+    for (let startDay = 1; startDay <= daysInMonth; startDay += 7) {
+      const endDay = Math.min(startDay + 6, daysInMonth);
+      const effectiveStart = new Date(y, mo, startDay, 0, 0, 0, 0);
+      const effectiveEnd = new Date(y, mo, endDay, 23, 59, 59, 999);
+      const weekNum = buckets.length + 1;
+
+      const total = monthExpenseTransactions
+        .filter(tx => {
+          if (!tx.date) return false;
+          const d = new Date(tx.date);
+          return d >= effectiveStart && d <= effectiveEnd;
+        })
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+      buckets.push({
+        start: effectiveStart,
+        end: effectiveEnd,
+        label: `W${weekNum}`,
+        total,
+      });
+    }
+    return buckets;
+  }, [monthExpenseTransactions, monthStart, monthEnd]);
+
+  const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
+
+  const visibleTransactions = useMemo(() => {
+    if (selectedWeekIdx === null) return monthTransactions;
+    const b = weekBuckets[selectedWeekIdx];
+    if (!b) return monthTransactions;
+    return monthTransactions.filter(tx => {
+      if (!tx.date) return false;
+      const d = new Date(tx.date);
+      return d >= b.start && d <= b.end;
+    });
+  }, [monthTransactions, selectedWeekIdx, weekBuckets]);
+
   const expenseTransactions = useMemo(
-    () => transactions.filter((transaction) => transaction.amount < 0),
-    [transactions],
+    () => visibleTransactions.filter((transaction) => transaction.amount < 0),
+    [visibleTransactions],
   );
 
   const incomeTotalUsd = useMemo(
-    () => transactions.filter((t) => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
-    [transactions],
+    () => visibleTransactions.filter((t) => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
+    [visibleTransactions],
   );
 
   const totalExpenses = useMemo(
@@ -163,8 +212,21 @@ export default function BudgetScreen() {
     [expenseTransactions],
   );
 
+  const scopeDayCount = useMemo(() => {
+    if (selectedWeekIdx !== null) {
+      const b = weekBuckets[selectedWeekIdx];
+      if (!b) return 1;
+      const s = new Date(b.start);
+      const e = new Date(b.end);
+      s.setHours(0, 0, 0, 0);
+      e.setHours(0, 0, 0, 0);
+      return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1);
+    }
+    return Math.max(1, monthEnd.getDate());
+  }, [selectedWeekIdx, weekBuckets, monthEnd]);
+
   const projectedSavingsUsd = Math.max(0, incomeTotalUsd - totalExpenses);
-  const avgDailyUsd = totalExpenses > 0 ? totalExpenses / 30 : 0;
+  const avgDailyUsd = totalExpenses > 0 ? totalExpenses / scopeDayCount : 0;
 
   const trackColor = borderToken;
 
@@ -208,53 +270,6 @@ export default function BudgetScreen() {
     if (!topCategory) return null;
     return visualForCategory(topCategory.name, 'expense', topCategory.name === OTHER_CATEGORY_LABEL);
   }, [topCategory]);
-
-  // Build real weekly buckets for this month
-  const weekBuckets = useMemo(() => {
-    const buckets: { start: Date; end: Date; label: string; total: number }[] = [];
-    const mStart = new Date(monthStart);
-    // Find the Monday on or before monthStart
-    let cursor = new Date(mStart);
-    const dow = cursor.getDay();
-    const toMon = dow === 0 ? -6 : 1 - dow;
-    cursor.setDate(cursor.getDate() + toMon);
-    
-    let weekNum = 1;
-    while (cursor <= monthEnd) {
-      const wkStart = new Date(cursor);
-      const wkEnd = new Date(cursor);
-      wkEnd.setDate(wkEnd.getDate() + 6);
-      wkEnd.setHours(23, 59, 59, 999);
-      
-      // Only include weeks that overlap this month
-      const effectiveStart = wkStart < monthStart ? monthStart : wkStart;
-      const effectiveEnd = wkEnd > monthEnd ? monthEnd : wkEnd;
-      
-      const total = expenseTransactions
-        .filter(tx => {
-          if (!tx.date) return false;
-          const d = new Date(tx.date);
-          return d >= effectiveStart && d <= effectiveEnd;
-        })
-        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-      
-      const startDay = effectiveStart.getDate();
-      const endDay = effectiveEnd.getDate();
-      buckets.push({
-        start: effectiveStart,
-        end: effectiveEnd,
-        label: `W${weekNum}`,
-        total,
-      });
-      
-      cursor.setDate(cursor.getDate() + 7);
-      weekNum++;
-      if (weekNum > 6) break; // safety
-    }
-    return buckets;
-  }, [expenseTransactions, monthStart, monthEnd]);
-
-  const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
   
   // Week comparison: selected week vs previous week
   const currentWeekTotal = selectedWeekIdx !== null ? weekBuckets[selectedWeekIdx]?.total ?? 0 : 0;
@@ -270,7 +285,7 @@ export default function BudgetScreen() {
     return weekBuckets.map((bucket, index) => ({
       key: `w-${index}`,
       heightPct: bucket.total > 0 ? Math.max(14, Math.round((bucket.total / max) * 100)) : 8,
-      highlight: selectedWeekIdx === null ? index === weekBuckets.length - 1 : index === selectedWeekIdx,
+      highlight: selectedWeekIdx === null || index === selectedWeekIdx,
       label: bucket.label,
       total: bucket.total,
     }));
@@ -330,8 +345,9 @@ export default function BudgetScreen() {
             <View>
               <ThemedText style={styles.cardTitleSm}>Spending by category</ThemedText>
               <ThemedText style={[styles.cardSubtitle, { color: mutedForeground }]}>
-                Your primary outflow is spread across the categories below. Use this view to spot where to trim
-                first.
+                {selectedWeekIdx !== null
+                  ? `Category split for ${weekBuckets[selectedWeekIdx]?.label ?? 'week'} only. Tap that bar again below to return to the full month.`
+                  : 'Your primary outflow is spread across the categories below. Use this view to spot where to trim first.'}
               </ThemedText>
             </View>
             <View style={styles.legendList}>
@@ -406,7 +422,9 @@ export default function BudgetScreen() {
               )
             ) : (
               <View style={[styles.alertChip, { backgroundColor: isDark ? 'rgba(139,124,255,0.14)' : 'rgba(127,61,255,0.08)' }]}>
-                <ThemedText style={[styles.alertChipText, { color: primaryForeground }]}>Select week</ThemedText>
+                <ThemedText style={[styles.alertChipText, { color: primaryForeground }]}>
+                  {selectedWeekIdx !== null ? 'Week view' : 'Month total'}
+                </ThemedText>
               </View>
             )}
           </View>
@@ -425,7 +443,10 @@ export default function BudgetScreen() {
                 `${weekBuckets[selectedWeekIdx]?.label}: ${formatUsd(currentWeekTotal, { compact: true })} spent. No prior week to compare.`
               )
             ) : (
-              'Tap a bar to compare spending between weeks of this month.'
+              <>
+                {formatUsd(totalExpenses, { compact: true })} total in {monthLabel}. Tap a bar to compare that period
+                with the one before.
+              </>
             )}
           </ThemedText>
 
@@ -490,7 +511,11 @@ export default function BudgetScreen() {
                 {topCategory ? topCategory.name : '—'}
               </ThemedText>
               <ThemedText style={[styles.tileMeta, { color: mutedForeground }]} numberOfLines={2}>
-                {topCategory ? `${formatUsd(topCategory.amount, { compact: true })} this month` : 'No expenses recorded'}
+                {topCategory
+                  ? `${formatUsd(topCategory.amount, { compact: true })} ${
+                      selectedWeekIdx !== null ? `in ${weekBuckets[selectedWeekIdx]?.label ?? 'week'}` : 'this month'
+                    }`
+                  : 'No expenses recorded'}
               </ThemedText>
             </View>
           </View>
@@ -509,7 +534,11 @@ export default function BudgetScreen() {
                 {totalExpenses > 0 ? formatUsd(-avgDailyUsd) : '—'}
               </ThemedText>
               <ThemedText style={[styles.tileMeta, { color: mutedForeground }]} numberOfLines={2}>
-                {totalExpenses > 0 ? 'Estimated from last 30 days of activity' : 'Add expenses to estimate'}
+                {totalExpenses > 0
+                  ? selectedWeekIdx !== null
+                    ? `Daily average across ${weekBuckets[selectedWeekIdx]?.label ?? 'week'}`
+                    : 'Daily average for days in this month'
+                  : 'Add expenses to estimate'}
               </ThemedText>
             </View>
           </View>

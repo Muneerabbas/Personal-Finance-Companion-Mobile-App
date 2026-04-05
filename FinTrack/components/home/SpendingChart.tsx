@@ -11,24 +11,21 @@ export type ChartPoint = {
   value: number;
   label: string;
   amountUsd: number;
-  /** ISO date string for this day bucket */
   dateKey?: string;
 };
 
 type SpendingChartProps = {
   data: ChartPoint[];
-  /** Index of the currently selected (tapped) bar, or null */
+  /** Bar highlight in day-by-day mode; null when “To date” aggregate mode is on */
   selectedIndex?: number | null;
-  /** Called when a bar is tapped */
   onBarPress?: (index: number) => void;
-  /** Current week offset (0 = this week, 1 = last week, ...) */
   weekOffset?: number;
-  /** Max number of weeks user can go back */
   maxWeekOffset?: number;
-  /** Called when user navigates weeks */
   onWeekChange?: (offset: number) => void;
-  /** Date range label to display */
   weekLabel?: string;
+  /** ON: totals use the week through today. OFF: single-day view (defaults to today’s bar). */
+  toDateEnabled: boolean;
+  onToDateToggle: () => void;
 };
 
 const BAR_CHART_HEIGHT = 140;
@@ -41,6 +38,8 @@ function SpendingChartInner({
   maxWeekOffset = 3,
   onWeekChange,
   weekLabel,
+  toDateEnabled,
+  onToDateToggle,
 }: SpendingChartProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
@@ -48,6 +47,7 @@ function SpendingChartInner({
   const primaryColor = useThemeColor({}, 'primary');
   const cardBg = useThemeColor({}, 'card');
   const borderColor = useThemeColor({}, 'border');
+  const onPrimaryText = '#FFFFFF';
 
   const series = useMemo(() => {
     const sliced = data.slice(0, 7);
@@ -59,24 +59,21 @@ function SpendingChartInner({
     return out;
   }, [data]);
 
-  // Highlight: selected bar if any, otherwise the max bar
+  const hasBarHighlight = !toDateEnabled && selectedIndex !== null && selectedIndex !== undefined;
+
   const highlightIndex = useMemo(() => {
-    if (selectedIndex !== null && selectedIndex !== undefined) return selectedIndex;
-    let best = 0;
-    for (let i = 1; i < series.length; i++) {
-      if (series[i].value > series[best].value) best = i;
-    }
-    return best;
-  }, [series, selectedIndex]);
+    if (hasBarHighlight) return selectedIndex as number;
+    return -1;
+  }, [selectedIndex, hasBarHighlight]);
 
   const bars = useMemo(() => {
+    // Tallest bar = the day with the highest spend this week; other days are scaled as a % of that max.
     const maxV = Math.max(...series.map((d) => d.value), 1);
     return series.map((point, index) => {
-      // Scale bar height: minimum 8% so empty days still show a tiny stub
       const heightPct = point.value > 0
         ? Math.max(14, Math.round((point.value / maxV) * 100))
         : 8;
-      const isHighlight = index === highlightIndex;
+      const isHighlight = !hasBarHighlight || index === highlightIndex;
       return {
         key: `${point.label}-${index}`,
         heightPct,
@@ -84,44 +81,62 @@ function SpendingChartInner({
         shortLabel: point.label.slice(0, 3).toUpperCase(),
       };
     });
-  }, [series, highlightIndex]);
+  }, [series, highlightIndex, hasBarHighlight]);
 
   const inactiveBarColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)';
   const chartWellBg = isDark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.04)';
-  const hasSelection = selectedIndex !== null && selectedIndex !== undefined;
   const canGoForward = weekOffset > 0;
   const canGoBack = weekOffset < maxWeekOffset;
 
   return (
     <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
-      {/* Header with title and week navigation */}
-      <View style={styles.headerRow}>
+      <View style={styles.headerBlock}>
         <ThemedText style={styles.title}>Weekly Spending</ThemedText>
-        <View style={styles.weekNav}>
+        <View style={styles.headerActionsRow}>
+          <View style={styles.weekNav}>
+            <Pressable
+              onPress={() => canGoBack && onWeekChange?.(weekOffset + 1)}
+              hitSlop={10}
+              style={[styles.navBtn, !canGoBack && styles.navBtnDisabled]}>
+              <Ionicons name="chevron-back" size={18} color={canGoBack ? primaryColor : (isDark ? '#333' : '#ccc')} />
+            </Pressable>
+            <ThemedText style={[styles.weekLabel, { color: primaryColor }]}>
+              {weekLabel || (weekOffset === 0 ? 'This Week' : `${weekOffset}w ago`)}
+            </ThemedText>
+            <Pressable
+              onPress={() => canGoForward && onWeekChange?.(weekOffset - 1)}
+              hitSlop={10}
+              style={[styles.navBtn, !canGoForward && styles.navBtnDisabled]}>
+              <Ionicons name="chevron-forward" size={18} color={canGoForward ? primaryColor : (isDark ? '#333' : '#ccc')} />
+            </Pressable>
+          </View>
           <Pressable
-            onPress={() => canGoBack && onWeekChange?.(weekOffset + 1)}
-            hitSlop={10}
-            style={[styles.navBtn, !canGoBack && styles.navBtnDisabled]}>
-            <Ionicons name="chevron-back" size={18} color={canGoBack ? primaryColor : (isDark ? '#333' : '#ccc')} />
-          </Pressable>
-          <ThemedText style={[styles.weekLabel, { color: primaryColor }]}>
-            {weekLabel || (weekOffset === 0 ? 'This Week' : `${weekOffset}w ago`)}
-          </ThemedText>
-          <Pressable
-            onPress={() => canGoForward && onWeekChange?.(weekOffset - 1)}
-            hitSlop={10}
-            style={[styles.navBtn, !canGoForward && styles.navBtnDisabled]}>
-            <Ionicons name="chevron-forward" size={18} color={canGoForward ? primaryColor : (isDark ? '#333' : '#ccc')} />
+            onPress={onToDateToggle}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: toDateEnabled }}
+            accessibilityLabel="To date: use spending through today for this week"
+            style={({ pressed }) => [
+              styles.toDateChip,
+              { borderColor },
+              toDateEnabled && { backgroundColor: primaryColor, borderColor: primaryColor },
+              pressed && { opacity: 0.9 },
+            ]}>
+            <ThemedText
+              style={[
+                styles.toDateChipText,
+                { color: toDateEnabled ? onPrimaryText : mutedColor },
+              ]}>
+              To date
+            </ThemedText>
           </Pressable>
         </View>
       </View>
 
-      {/* Chart */}
       <View style={[styles.chartWell, { backgroundColor: chartWellBg }]}>
         <View
           style={[styles.barsRow, { height: BAR_CHART_HEIGHT }]}
           accessible
-          accessibilityLabel="Spending by day for the selected week">
+          accessibilityLabel="Spending by day; bar height is relative to the highest-spending day this week">
           {bars.map((bar, index) => (
             <Pressable
               key={bar.key}
@@ -133,7 +148,7 @@ function SpendingChartInner({
                   {
                     height: `${bar.heightPct}%`,
                     backgroundColor: bar.isHighlight ? primaryColor : inactiveBarColor,
-                    opacity: hasSelection && !bar.isHighlight ? 0.35 : 1,
+                    opacity: hasBarHighlight && !bar.isHighlight ? 0.35 : 1,
                   },
                 ]}
               />
@@ -169,11 +184,15 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 18,
   },
-  headerRow: {
+  headerBlock: {
+    marginBottom: 14,
+    gap: 10,
+  },
+  headerActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    gap: 12,
   },
   title: {
     fontFamily: Fonts.bold,
@@ -202,8 +221,22 @@ const styles = StyleSheet.create({
   chartWell: {
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingBottom: 14,
+  },
+  toDateChip: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  toDateChipText: {
+    fontFamily: Fonts.bold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   barsRow: {
     flexDirection: 'row',
