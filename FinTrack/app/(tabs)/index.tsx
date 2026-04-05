@@ -5,11 +5,13 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import BalanceCard from '@/components/home/BalanceCard';
-import AppHeader from '@/components/layout/AppHeader';
+import BudgetCard from '@/components/home/BudgetCard';
 import IncomeExpenseCard from '@/components/home/IncomeExpenseCard';
+import InsightsSection from '@/components/home/InsightsSection';
 import SafeToSpendCard from '@/components/home/SafeToSpendCard';
 import SpendingChart from '@/components/home/SpendingChart';
 import TransactionList from '@/components/home/TransactionList';
+import AppHeader from '@/components/layout/AppHeader';
 import { Colors } from '@/constants/theme';
 import { useTransactions } from '@/context/transactions-context';
 import { dashboardMock, HOME_RECENT_TRANSACTION_COUNT } from '@/data/dashboard-mock';
@@ -23,6 +25,36 @@ export default function HomeScreen() {
 
   const weeklySpendingData = useMemo(() => dashboardMock.spendingTrends.Week ?? [], []);
 
+  const { totalIncome, totalExpenses } = useMemo(() => {
+    let income = 0;
+    let expenses = 0;
+    transactions.forEach(t => {
+      if (t.amount > 0) income += t.amount;
+      else if (t.amount < 0) expenses += Math.abs(t.amount);
+    });
+    
+    // Fallback to mock data if there are no transactions available, so UI renders correctly
+    if (income === 0 && expenses === 0 && dashboardMock.incomeExpense) {
+      return { 
+        totalIncome: dashboardMock.incomeExpense.incomeUsd, 
+        totalExpenses: dashboardMock.incomeExpense.expensesUsd 
+      };
+    }
+    
+    return { totalIncome: income, totalExpenses: expenses };
+  }, [transactions]);
+
+  const netBalance = totalIncome - totalExpenses;
+  const budget = 2500; // Represents standard monthly budget
+  const remainingBudget = Math.max(0, budget - totalExpenses);
+  
+  const today = new Date();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const daysLeftInMonth = Math.max(1, daysInMonth - today.getDate() + 1);
+  
+  const safeToSpend = remainingBudget / daysLeftInMonth;
+  const potentialSavings = totalIncome - budget;
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top']}>
       <ScrollView
@@ -30,15 +62,23 @@ export default function HomeScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}>
         <AppHeader />
-        <BalanceCard amountUsd={dashboardMock.balance.amountUsd} />
+        
+        <BalanceCard amountUsd={netBalance} />
+        
         <IncomeExpenseCard
-          incomeUsd={dashboardMock.incomeExpense.incomeUsd}
-          expensesUsd={dashboardMock.incomeExpense.expensesUsd}
+          incomeUsd={totalIncome}
+          expensesUsd={totalExpenses}
         />
-        <SafeToSpendCard
-          incomeUsd={dashboardMock.incomeExpense.incomeUsd}
-          expensesUsd={dashboardMock.incomeExpense.expensesUsd}
+        
+        <BudgetCard 
+          budgetUsd={budget} 
+          remainingUsd={remainingBudget} 
+          expensesUsd={totalExpenses} 
         />
+        
+        <SafeToSpendCard safeToSpendUsd={safeToSpend} />
+        
+        <InsightsSection potentialSavingsUsd={potentialSavings} />
 
         <View style={styles.chartSection}>
           <SpendingChart data={weeklySpendingData} />

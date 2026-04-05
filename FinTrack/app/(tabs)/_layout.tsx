@@ -60,99 +60,16 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
-  const [fabOpen, setFabOpen] = useState(false);
-  const fabProgress = useSharedValue(0);
+  
   const safeBottomInset = Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 10);
   const tabBarBottom = 0;
   const tabBarHeight = 92 + safeBottomInset;
   const tabBarPaddingBottom = Math.max(safeBottomInset, 10);
-  const centerButtonBottom = tabBarPaddingBottom +42;
-
-  const closeFab = () => {
-    fabProgress.value = withSpring(0, FAB_SPRING_CLOSE, (finished) => {
-      if (finished) {
-        runOnJS(setFabOpen)(false);
-      }
-    });
-  };
-
-  const openFab = () => {
-    setFabOpen(true);
-    fabProgress.value = 0;
-    fabProgress.value = withSpring(1, FAB_SPRING_OPEN);
-  };
+  const centerButtonBottom = tabBarPaddingBottom + 42;
 
   const toggleFab = () => {
-    if (fabOpen) {
-      closeFab();
-    } else {
-      openFab();
-    }
+    router.push({ pathname: '/add-transaction', params: { type: 'expense' } });
   };
-
-  const handleFabActionPress = (route: '/expense' | '/income' | '/transfer') => {
-    closeFab();
-    router.push(route);
-  };
-
-  const fabIconStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        rotate: `${interpolate(fabProgress.value, [0, 1], [0, 45], Extrapolate.CLAMP)}deg`,
-      },
-    ],
-  }));
-
-  const fabButtonStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        scale: interpolate(fabProgress.value, [0, 1], [1, 0.96], Extrapolate.CLAMP),
-      },
-    ],
-  }));
-
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(fabProgress.value, [0, 1], [0, 0.28], Extrapolate.CLAMP),
-  }));
-
-  const actionStyleBlue = useAnimatedStyle(() => {
-    const t = interpolate(fabProgress.value, [0.05, 0.52], [0, 1], Extrapolate.CLAMP);
-    const scale = interpolate(t, [0, 1], [0.4, 1], Extrapolate.CLAMP);
-    return {
-      opacity: t,
-      transform: [
-        { translateX: -72 * t },
-        { translateY: -54 * t },
-        { scale },
-      ],
-    };
-  });
-
-  const actionStyleGreen = useAnimatedStyle(() => {
-    const t = interpolate(fabProgress.value, [0.12, 0.58], [0, 1], Extrapolate.CLAMP);
-    const scale = interpolate(t, [0, 1], [0.4, 1], Extrapolate.CLAMP);
-    return {
-      opacity: t,
-      transform: [
-        { translateX: 0 },
-        { translateY: -86 * t },
-        { scale },
-      ],
-    };
-  });
-
-  const actionStyleRed = useAnimatedStyle(() => {
-    const t = interpolate(fabProgress.value, [0.18, 0.64], [0, 1], Extrapolate.CLAMP);
-    const scale = interpolate(t, [0, 1], [0.4, 1], Extrapolate.CLAMP);
-    return {
-      opacity: t,
-      transform: [
-        { translateX: 72 * t },
-        { translateY: -54 * t },
-        { scale },
-      ],
-    };
-  });
 
   return (
     <View style={styles.container}>
@@ -256,42 +173,11 @@ export default function TabLayout() {
         />
       </Tabs>
 
-      {fabOpen ? (
-        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          <Pressable style={styles.backdropHit} onPress={closeFab}>
-            <Animated.View pointerEvents="none" style={[styles.backdropFill, backdropStyle]} />
-          </Pressable>
-          <View
-            pointerEvents="box-none"
-            style={[
-              styles.actionCluster,
-              {
-                bottom: centerButtonBottom,
-              },
-            ]}>
-            <Animated.View style={[styles.actionButton, styles.actionBlueBase, actionStyleBlue]}>
-              <Pressable style={styles.actionHit} onPress={() => handleFabActionPress('/transfer')}>
-                <MaterialCommunityIcons name="swap-horizontal" size={28} color="#FFFFFF" />
-              </Pressable>
-            </Animated.View>
-            <Animated.View style={[styles.actionButton, styles.actionGreenBase, actionStyleGreen]}>
-              <Pressable style={styles.actionHit} onPress={() => handleFabActionPress('/income')}>
-                <MaterialCommunityIcons name="wallet-plus-outline" size={28} color="#FFFFFF" />
-              </Pressable>
-            </Animated.View>
-            <Animated.View style={[styles.actionButton, styles.actionRedBase, actionStyleRed]}>
-              <Pressable style={styles.actionHit} onPress={() => handleFabActionPress('/expense')}>
-                <MaterialCommunityIcons name="help" size={30} color="#FFFFFF" />
-              </Pressable>
-            </Animated.View>
-          </View>
-        </View>
-      ) : null}
+
 
       <Animated.View
         style={[
           styles.centerButton,
-          fabButtonStyle,
           {
             backgroundColor: theme.primary,
             bottom: centerButtonBottom,
@@ -301,7 +187,7 @@ export default function TabLayout() {
           accessibilityRole="button"
           onPress={toggleFab}
           style={styles.centerButtonHit}>
-          <Animated.View style={fabIconStyle}>
+          <Animated.View>
             <PlusTabIcon color="#FFFFFF" size={32} />
           </Animated.View>
         </Pressable>

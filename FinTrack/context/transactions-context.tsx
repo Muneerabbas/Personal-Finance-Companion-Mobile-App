@@ -2,11 +2,11 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 
 import type { Transaction } from '@/components/home/TransactionItem';
 import { dashboardMock } from '@/data/dashboard-mock';
-import { buildTransaction, type AddTransactionInput } from '@/lib/build-transaction';
+import { mapPayloadToUITransaction, type TransactionPayload } from '@/lib/transaction-helper';
 
 type TransactionsContextValue = {
   transactions: Transaction[];
-  addTransaction: (input: AddTransactionInput) => void;
+  addTransaction: (payload: TransactionPayload) => Promise<void>;
 };
 
 const TransactionsContext = createContext<TransactionsContextValue | null>(null);
@@ -14,8 +14,8 @@ const TransactionsContext = createContext<TransactionsContextValue | null>(null)
 export function TransactionsProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>(() => [...dashboardMock.transactions]);
 
-  const addTransaction = useCallback((input: AddTransactionInput) => {
-    const row = buildTransaction(input);
+  const addTransaction = useCallback(async (payload: TransactionPayload) => {
+    const row = mapPayloadToUITransaction(payload);
     setTransactions((prev) => [row, ...prev]);
   }, []);
 
