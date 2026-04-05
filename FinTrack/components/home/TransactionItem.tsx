@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CurrencyText } from '@/components/currency-text';
 import { ThemedText } from '@/components/themed-text';
@@ -15,15 +15,18 @@ export type Transaction = {
   icon: keyof typeof Ionicons.glyphMap;
   iconBackground: string;
   iconColor: string;
-  /** Custom “Other” category — grey tag icon in UI */
+  /** Raw ISO date string from DB for grouping/filtering */
+  date?: string;
+  /** Custom "Other" category — grey tag icon in UI */
   isOtherCategory?: boolean;
 };
 
 type TransactionItemProps = {
   item: Transaction;
+  onPress?: (item: Transaction) => void;
 };
 
-export default function TransactionItem({ item }: TransactionItemProps) {
+export default function TransactionItem({ item, onPress }: TransactionItemProps) {
   const isExpense = item.amount < 0;
   const isDark = (useColorScheme() ?? 'light') === 'dark';
   const metaLine = `${item.category} • ${item.timeLabel}`;
@@ -41,12 +44,14 @@ export default function TransactionItem({ item }: TransactionItemProps) {
       : '#15803D';
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={() => onPress?.(item)}
+      style={({ pressed }) => [
         styles.container,
         {
           backgroundColor: isDark ? '#171B2B' : '#FFFFFF',
           borderColor: isDark ? '#232A3F' : '#E8E8ED',
+          opacity: pressed ? 0.85 : 1,
         },
       ]}>
       <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
@@ -79,10 +84,10 @@ export default function TransactionItem({ item }: TransactionItemProps) {
         <Text
           style={[styles.paymentMethod, { color: isDark ? '#6B7280' : '#9CA3AF' }]}
           numberOfLines={1}>
-          {item.paymentMethod.toUpperCase()}
+          {(item.paymentMethod || '').toUpperCase()}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

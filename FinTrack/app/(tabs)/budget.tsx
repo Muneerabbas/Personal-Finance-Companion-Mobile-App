@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { OTHER_CATEGORY_LABEL, visualForCategory } from '@/constants/transaction-category-styles';
 import { Fonts } from '@/constants/theme';
 import { useCurrency } from '@/context/currency-context';
-import { useTransactions } from '@/context/transactions-context';
+import { useStore } from '@/store/useStore';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
@@ -22,9 +22,21 @@ type CategorySlice = {
   color: string;
 };
 
-const MONTH_LABEL = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(
-  new Date(),
-);
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function getMonthLabel(offset: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - offset);
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function getMonthRange(offset: number): { start: Date; end: Date } {
+  const d = new Date();
+  d.setMonth(d.getMonth() - offset);
+  const start = new Date(d.getFullYear(), d.getMonth(), 1);
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start, end };
+}
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
@@ -90,12 +102,43 @@ function weeklyBarsFromExpenses(count: number, expenseAmounts: number[]) {
 
 export default function BudgetScreen() {
   const router = useRouter();
-  const { transactions } = useTransactions();
+  const allTransactions = useStore((state) => state.transactions);
   const { formatUsd } = useCurrency();
   const colorScheme = useColorScheme() ?? 'dark';
   const isDark = colorScheme === 'dark';
   const { width: windowWidth } = useWindowDimensions();
   const isWideLayout = windowWidth >= 640;
+
+  const [monthOffset, setMonthOffset] = useState(0);
+  const MAX_MONTH_OFFSET = 3; // 4 months total
+
+  // Find earliest transaction month to cap navigation
+  const earliestMonthsBack = useMemo(() => {
+    if (allTransactions.length === 0) return 0;
+    const now = new Date();
+    let maxBack = 0;
+    for (const tx of allTransactions) {
+      if (!tx.date) continue;
+      const txDate = new Date(tx.date);
+      const monthsDiff = (now.getFullYear() - txDate.getFullYear()) * 12 + (now.getMonth() - txDate.getMonth());
+      if (monthsDiff > maxBack) maxBack = monthsDiff;
+    }
+    return Math.min(maxBack, MAX_MONTH_OFFSET);
+  }, [allTransactions]);
+
+  const canGoBack = monthOffset < earliestMonthsBack;
+  const canGoForward = monthOffset > 0;
+  const monthLabel = getMonthLabel(monthOffset);
+  const { start: monthStart, end: monthEnd } = useMemo(() => getMonthRange(monthOffset), [monthOffset]);
+
+  // Filter transactions for the selected month
+  const transactions = useMemo(() => {
+    return allTransactions.filter(tx => {
+      if (!tx.date) return false;
+      const d = new Date(tx.date);
+      return d >= monthStart && d <= monthEnd;
+    });
+  }, [allTransactions, monthStart, monthEnd]);
 
   /** Semantic tokens from `constants/theme` via `useThemeColor` (ThemedText uses the same hook for default `text`). */
   const mutedForeground = useThemeColor({}, 'muted');
@@ -165,19 +208,73 @@ export default function BudgetScreen() {
     if (!topCategory) return null;
     return visualForCategory(topCategory.name, 'expense', topCategory.name === OTHER_CATEGORY_LABEL);
   }, [topCategory]);
-  const previousWindow = expenseTransactions.slice(7, 14);
-  const currentWindow = expenseTransactions.slice(0, 7);
-  const previousTotal = previousWindow.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-  const currentTotal = currentWindow.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-  const comparisonPct = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : 0;
-  const isIncrease = comparisonPct >= 0;
+
+  // Build real weekly buckets for this month
+  const weekBuckets = useMemo(() => {
+    const buckets: { start: Date; end: Date; label: string; total: number }[] = [];
+    const mStart = new Date(monthStart);
+    // Find the Monday on or before monthStart
+    let cursor = new Date(mStart);
+    const dow = cursor.getDay();
+    const toMon = dow === 0 ? -6 : 1 - dow;
+    cursor.setDate(cursor.getDate() + toMon);
+    
+    let weekNum = 1;
+    while (cursor <= monthEnd) {
+      const wkStart = new Date(cursor);
+      const wkEnd = new Date(cursor);
+      wkEnd.setDate(wkEnd.getDate() + 6);
+      wkEnd.setHours(23, 59, 59, 999);
+      
+      // Only include weeks that overlap this month
+      const effectiveStart = wkStart < monthStart ? monthStart : wkStart;
+      const effectiveEnd = wkEnd > monthEnd ? monthEnd : wkEnd;
+      
+      const total = expenseTransactions
+        .filter(tx => {
+          if (!tx.date) return false;
+          const d = new Date(tx.date);
+          return d >= effectiveStart && d <= effectiveEnd;
+        })
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+      
+      const startDay = effectiveStart.getDate();
+      const endDay = effectiveEnd.getDate();
+      buckets.push({
+        start: effectiveStart,
+        end: effectiveEnd,
+        label: `W${weekNum}`,
+        total,
+      });
+      
+      cursor.setDate(cursor.getDate() + 7);
+      weekNum++;
+      if (weekNum > 6) break; // safety
+    }
+    return buckets;
+  }, [expenseTransactions, monthStart, monthEnd]);
+
+  const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
+  
+  // Week comparison: selected week vs previous week
+  const currentWeekTotal = selectedWeekIdx !== null ? weekBuckets[selectedWeekIdx]?.total ?? 0 : 0;
+  const previousWeekTotal = selectedWeekIdx !== null && selectedWeekIdx > 0 ? weekBuckets[selectedWeekIdx - 1]?.total ?? 0 : 0;
+  const weekComparisonPct = previousWeekTotal > 0 ? ((currentWeekTotal - previousWeekTotal) / previousWeekTotal) * 100 : 0;
+  const isWeekIncrease = weekComparisonPct >= 0;
+
   const prediction = summarizePrediction(categorySlices, projectedSavingsUsd, formatUsd);
 
-  const expenseAmounts = useMemo(
-    () => expenseTransactions.map((item) => Math.abs(item.amount)),
-    [expenseTransactions],
-  );
-  const weekBars = weeklyBarsFromExpenses(5, expenseAmounts);
+  // Build bar data from real weekly buckets
+  const weekBars = useMemo(() => {
+    const max = Math.max(...weekBuckets.map(b => b.total), 1);
+    return weekBuckets.map((bucket, index) => ({
+      key: `w-${index}`,
+      heightPct: bucket.total > 0 ? Math.max(14, Math.round((bucket.total / max) * 100)) : 8,
+      highlight: selectedWeekIdx === null ? index === weekBuckets.length - 1 : index === selectedWeekIdx,
+      label: bucket.label,
+      total: bucket.total,
+    }));
+  }, [weekBuckets, selectedWeekIdx]);
 
   const segments = ringSegments(
     categorySlices.length
@@ -200,9 +297,23 @@ export default function BudgetScreen() {
         <AppHeader />
         <View style={styles.headerBlock}>
           <ThemedText style={styles.heroTitle}>Financial insights</ThemedText>
-          <ThemedText style={[styles.heroEyebrow, { color: mutedForeground }]}>
-            Performance analysis • {MONTH_LABEL}
-          </ThemedText>
+          <View style={styles.monthNav}>
+            <Pressable
+              onPress={() => { if (canGoBack) { setMonthOffset(prev => prev + 1); setSelectedWeekIdx(null); } }}
+              hitSlop={10}
+              style={[styles.monthNavBtn, !canGoBack && { opacity: 0.3 }]}>
+              <Ionicons name="chevron-back" size={18} color={primaryForeground} />
+            </Pressable>
+            <ThemedText style={[styles.heroEyebrow, { color: mutedForeground }]}>
+              {monthLabel}
+            </ThemedText>
+            <Pressable
+              onPress={() => { if (canGoForward) { setMonthOffset(prev => prev - 1); setSelectedWeekIdx(null); } }}
+              hitSlop={10}
+              style={[styles.monthNavBtn, !canGoForward && { opacity: 0.3 }]}>
+              <Ionicons name="chevron-forward" size={18} color={primaryForeground} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Bento: spending by category (large) */}
@@ -265,7 +376,7 @@ export default function BudgetScreen() {
               ))}
             </Svg>
             <View style={styles.chartCenter}>
-              <ThemedText style={styles.totalValue}>{formatUsd(-totalExpenses || 0)}</ThemedText>
+              <ThemedText style={styles.totalValue}>{formatUsd(-totalExpenses || 0, { compact: true })}</ThemedText>
               <ThemedText style={[styles.totalLabel, { color: mutedForeground }]}>Total spent</ThemedText>
             </View>
           </View>
@@ -283,49 +394,66 @@ export default function BudgetScreen() {
           ]}>
           <View style={styles.weeklyTop}>
             <MaterialCommunityIcons name="trending-up" size={28} color={primaryForeground} />
-            {isIncrease && previousTotal > 0 ? (
-              <View style={[styles.alertChip, { backgroundColor: errorSurface }]}>
-                <ThemedText style={[styles.alertChipText, { color: errorColor }]}>Alert</ThemedText>
-              </View>
+            {selectedWeekIdx !== null && previousWeekTotal > 0 ? (
+              isWeekIncrease ? (
+                <View style={[styles.alertChip, { backgroundColor: errorSurface }]}>
+                  <ThemedText style={[styles.alertChipText, { color: errorColor }]}>Alert</ThemedText>
+                </View>
+              ) : (
+                <View style={[styles.alertChip, { backgroundColor: isDark ? 'rgba(74,222,128,0.14)' : 'rgba(22,163,74,0.12)' }]}>
+                  <ThemedText style={[styles.alertChipText, { color: isDark ? '#4ADE80' : '#15803D' }]}>On track</ThemedText>
+                </View>
+              )
             ) : (
-              <View style={[styles.alertChip, { backgroundColor: isDark ? 'rgba(74,222,128,0.14)' : 'rgba(22,163,74,0.12)' }]}>
-                <ThemedText style={[styles.alertChipText, { color: isDark ? '#4ADE80' : '#15803D' }]}>On track</ThemedText>
+              <View style={[styles.alertChip, { backgroundColor: isDark ? 'rgba(139,124,255,0.14)' : 'rgba(127,61,255,0.08)' }]}>
+                <ThemedText style={[styles.alertChipText, { color: primaryForeground }]}>Select week</ThemedText>
               </View>
             )}
           </View>
           <ThemedText style={[styles.cardTitleSm, { marginBottom: 6 }]}>Weekly comparison</ThemedText>
           <ThemedText style={[styles.weeklyCopy, { color: mutedForeground }]}>
-            {previousTotal > 0 ? (
-              <>
-                Spending {isIncrease ? 'increased' : 'decreased'} by{' '}
-                <ThemedText style={{ color: isIncrease ? errorColor : '#34D399', fontFamily: Fonts.bold }}>
-                  {`${Math.abs(Math.round(comparisonPct))}%`}
-                </ThemedText>{' '}
-                vs your prior window of activity.
-              </>
+            {selectedWeekIdx !== null ? (
+              previousWeekTotal > 0 ? (
+                <>
+                  {weekBuckets[selectedWeekIdx]?.label}: Spending {isWeekIncrease ? 'increased' : 'decreased'} by{' '}
+                  <ThemedText style={{ color: isWeekIncrease ? errorColor : '#34D399', fontFamily: Fonts.bold }}>
+                    {`${Math.abs(Math.round(weekComparisonPct))}%`}
+                  </ThemedText>{' '}
+                  vs {weekBuckets[selectedWeekIdx - 1]?.label}. Total: {formatUsd(currentWeekTotal, { compact: true })}
+                </>
+              ) : (
+                `${weekBuckets[selectedWeekIdx]?.label}: ${formatUsd(currentWeekTotal, { compact: true })} spent. No prior week to compare.`
+              )
             ) : (
-              'Add more history to compare this week against the previous one.'
+              'Tap a bar to compare spending between weeks of this month.'
             )}
           </ThemedText>
 
           <View style={styles.miniBars}>
-            {weekBars.map((bar) => (
-              <View key={bar.key} style={styles.miniBarTrack}>
+            {weekBars.map((bar, index) => (
+              <Pressable
+                key={bar.key}
+                style={styles.miniBarTrack}
+                onPress={() => setSelectedWeekIdx(prev => prev === index ? null : index)}>
                 <View
                   style={[
                     styles.miniBarFill,
                     {
                       height: `${bar.heightPct}%`,
                       backgroundColor: bar.highlight ? primaryForeground : isDark ? '#2F3548' : '#E2E8F0',
+                      opacity: selectedWeekIdx !== null && !bar.highlight ? 0.4 : 1,
                     },
                   ]}
                 />
-              </View>
+              </Pressable>
             ))}
           </View>
           <View style={styles.miniAxis}>
-            <ThemedText style={[styles.axisTiny, { color: mutedForeground }]}>Mon</ThemedText>
-            <ThemedText style={[styles.axisTiny, { color: mutedForeground }]}>Fri</ThemedText>
+            {weekBars.map((bar) => (
+              <ThemedText key={`ax-${bar.key}`} style={[styles.axisTiny, { color: bar.highlight ? primaryForeground : mutedForeground, flex: 1, textAlign: 'center' }]}>
+                {bar.label}
+              </ThemedText>
+            ))}
           </View>
         </View>
 
@@ -362,7 +490,7 @@ export default function BudgetScreen() {
                 {topCategory ? topCategory.name : '—'}
               </ThemedText>
               <ThemedText style={[styles.tileMeta, { color: mutedForeground }]} numberOfLines={2}>
-                {topCategory ? `${formatUsd(-topCategory.amount)} this month` : 'No expenses recorded'}
+                {topCategory ? `${formatUsd(topCategory.amount, { compact: true })} this month` : 'No expenses recorded'}
               </ThemedText>
             </View>
           </View>
@@ -404,7 +532,7 @@ export default function BudgetScreen() {
             <Pressable
               onPress={() =>
                 prediction.cta === 'Add expenses'
-                  ? router.push('/expense')
+                  ? router.push('/add-transaction')
                   : router.push('/(tabs)/challenges')
               }
               style={({ pressed }) => [
@@ -454,6 +582,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
+  },
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  monthNavBtn: {
+    padding: 4,
   },
   bentoLarge: {
     borderRadius: 16,

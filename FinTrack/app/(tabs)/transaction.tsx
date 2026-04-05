@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import TransactionDetailModal from '@/components/home/TransactionDetailModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CurrencyText } from '@/components/currency-text';
@@ -8,8 +9,8 @@ import { type Transaction } from '@/components/home/TransactionItem';
 import AppHeader from '@/components/layout/AppHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
-import { useTransactions } from '@/context/transactions-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useStore } from '@/store/useStore';
 
 type TransactionFilter = 'all' | 'income' | 'expense';
 
@@ -142,7 +143,7 @@ function filterLabel(value: TransactionFilter) {
 }
 
 export default function TransactionScreen() {
-  const { transactions } = useTransactions();
+  const transactions = useStore(state => state.transactions);
   const colorScheme = useColorScheme() ?? 'dark';
   const theme = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
@@ -150,6 +151,15 @@ export default function TransactionScreen() {
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
   const normalizedQuery = deferredSearchText.trim().toLowerCase();
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+
+  const handleTxPress = useCallback((item: Transaction) => {
+    setSelectedTx(item);
+  }, []);
+
+  const handleModalClose = useCallback(() => {
+    setSelectedTx(null);
+  }, []);
 
   const sections = useMemo(
     () => buildSections(transactions, filter, normalizedQuery),
@@ -251,7 +261,7 @@ export default function TransactionScreen() {
                       ? '#86E2B8'
                       : '#1FA971';
                   return (
-                    <View key={item.id}>
+                    <Pressable key={item.id} onPress={() => handleTxPress(item)} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
                       <View style={styles.row}>
                         <View
                           style={[
@@ -323,7 +333,7 @@ export default function TransactionScreen() {
                           ]}
                         />
                       ) : null}
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -347,6 +357,12 @@ export default function TransactionScreen() {
             </ThemedText>
           </View>
         )}
+
+        <TransactionDetailModal
+          visible={selectedTx !== null}
+          transaction={selectedTx}
+          onClose={handleModalClose}
+        />
       </ScrollView>
     </SafeAreaView>
   );

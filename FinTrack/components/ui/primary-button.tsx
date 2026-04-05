@@ -5,19 +5,31 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+import { ActivityIndicator } from 'react-native';
+
 type PrimaryButtonProps = {
   title: string;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  loading?: boolean;
 };
 
-export default function PrimaryButton({ title, onPress, style }: PrimaryButtonProps) {
+export default function PrimaryButton({ title, onPress, style, disabled, loading }: PrimaryButtonProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
   return (
-    <Pressable style={[styles.button, { backgroundColor: theme.primary }, style]} onPress={onPress}>
-      <ThemedText style={styles.label}>{title}</ThemedText>
+    <Pressable 
+      style={[styles.button, { backgroundColor: theme.primary, opacity: disabled ? 0.7 : 1 }, style]} 
+      onPress={onPress}
+      disabled={disabled || loading}
+    >
+      {loading ? (
+        <ActivityIndicator color="#FFFFFF" />
+      ) : (
+        <ThemedText style={styles.label}>{title}</ThemedText>
+      )}
     </Pressable>
   );
 }

@@ -21,10 +21,10 @@ import { amountEntryStyles } from '@/constants/amount-entry-styles';
 import { Colors, Fonts } from '@/constants/theme';
 import { OTHER_CATEGORY_LABEL } from '@/constants/transaction-category-styles';
 import { useCurrency } from '@/context/currency-context';
-import { useTransactions } from '@/context/transactions-context';
 import { dashboardMock } from '@/data/dashboard-mock';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { createTransactionPayload } from '@/lib/transaction-helper';
+import { useStore } from '@/store/useStore';
 
 function parseAmount(raw: string) {
   const cleaned = raw.replace(/[^0-9.]/g, '');
@@ -40,7 +40,7 @@ export default function AddTransactionScreen() {
   const initialType = (params.type as TransactionType) || 'expense';
   
   const [type, setType] = useState<TransactionType>(initialType);
-  const { addTransaction } = useTransactions();
+  const addTransaction = useStore(state => state.addTransaction);
   const { currencySymbol, convertDisplayToUsd } = useCurrency();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -103,7 +103,13 @@ export default function AddTransactionScreen() {
     });
     
     await addTransaction(payload);
-    router.back();
+    setTimeout(() => {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
+    }, 0);
   };
 
   const getHeaderColor = () => {

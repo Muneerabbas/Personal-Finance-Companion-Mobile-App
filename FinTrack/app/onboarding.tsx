@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, StyleSheet, Dimensions, FlatList, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Slide1 } from '@/components/onboarding/Slide1';
 import { Slide2 } from '@/components/onboarding/Slide2';
@@ -29,15 +30,17 @@ export default function Onboarding() {
   const theme = Colors[colorScheme];
   const c = getOnboardingColors(colorScheme);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
     } else {
+      await AsyncStorage.setItem('hasFinishedOnboarding', 'true');
       router.replace('/(tabs)');
     }
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    await AsyncStorage.setItem('hasFinishedOnboarding', 'true');
     router.replace('/(tabs)');
   };
 

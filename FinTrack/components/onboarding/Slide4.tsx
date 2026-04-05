@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/themed-text';
 import { getOnboardingColors } from '@/constants/onboarding-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -13,12 +14,13 @@ export function Slide4() {
   const scheme = useColorScheme() ?? 'light';
   const c = getOnboardingColors(scheme);
 
-  const handleSignIn = () => {
-    router.replace('/(tabs)');
+  const handleSignIn = async () => {
+    await AsyncStorage.setItem('hasFinishedOnboarding', 'true');
+    router.replace('/(auth)/login');
   };
 
   const handleGuest = () => {
-    router.replace('/(tabs)');
+    // Guest mode currently disabled per request
   };
 
   return (
@@ -45,8 +47,7 @@ export function Slide4() {
 
       <View style={styles.buttonsContainer}>
         <Pressable style={[styles.googleButton, { backgroundColor: c.primary }]} onPress={handleSignIn}>
-          <AntDesign name="google" size={20} color="#fff" />
-          <ThemedText style={styles.googleButtonText}>Sign In with Google</ThemedText>
+          <ThemedText style={styles.googleButtonText}>Sign In</ThemedText>
         </Pressable>
 
         <Pressable style={[styles.guestButton, { backgroundColor: c.guestBg }]} onPress={handleGuest}>

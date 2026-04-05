@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useStore } from '@/store/useStore';
 
 import CurrencyPickerButton from '@/components/home/CurrencyPickerButton';
 import { ThemedText } from '@/components/themed-text';
@@ -20,14 +22,18 @@ function greetingLine() {
 }
 
 
-export default function AppHeader({ userFirstName = 'Alex', rightAccessory }: AppHeaderProps) {
+export default function AppHeader({ userFirstName, rightAccessory }: AppHeaderProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme];
+  const router = useRouter();
+  const user = useStore(state => state.user);
+
+  const displayFirstName = userFirstName || user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || user?.user_metadata?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'Guest';
 
   return (
     <View style={styles.row}>
-      <View style={styles.left}>
+      <Pressable style={styles.left} onPress={() => router.push('/profile')}>
         <View
           style={[
             styles.avatar,
@@ -41,10 +47,10 @@ export default function AppHeader({ userFirstName = 'Alex', rightAccessory }: Ap
         <View style={styles.greetingBlock}>
           <ThemedText style={[styles.greetLine, { color: theme.muted }]}>{greetingLine()}</ThemedText>
           <ThemedText style={[styles.nameLine, { color: theme.text }]} numberOfLines={1}>
-            {userFirstName}
+            {displayFirstName}
           </ThemedText>
         </View>
-      </View>
+      </Pressable>
 
       <View style={styles.right}>{rightAccessory ?? <CurrencyPickerButton variant="header" />}</View>
     </View>

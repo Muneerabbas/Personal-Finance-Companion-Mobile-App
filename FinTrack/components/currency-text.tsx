@@ -7,15 +7,17 @@ type CurrencyTextProps = Omit<TextProps, 'children'> & {
   amountUsd: number;
   /** When true, prefix + for income / positive and − for expense-style negatives. */
   signed?: boolean;
+  /** When true, amounts >= 1000 display as k (e.g. $11.5k) */
+  compact?: boolean;
 };
 
 /**
- * Formats a USD-stored amount in the user’s selected display currency.
+ * Formats a USD-stored amount in the user's selected display currency.
  */
-export function CurrencyText({ amountUsd, signed = false, style, ...rest }: CurrencyTextProps) {
+export function CurrencyText({ amountUsd, signed = false, compact = false, style, ...rest }: CurrencyTextProps) {
   const { formatUsd } = useCurrency();
   if (signed && amountUsd !== 0) {
-    const formatted = formatUsd(Math.abs(amountUsd));
+    const formatted = formatUsd(Math.abs(amountUsd), { compact });
     const text = amountUsd < 0 ? `−${formatted}` : `+${formatted}`;
     return (
       <Text style={style} {...rest}>
@@ -25,7 +27,7 @@ export function CurrencyText({ amountUsd, signed = false, style, ...rest }: Curr
   }
   return (
     <Text style={style} {...rest}>
-      {formatUsd(amountUsd)}
+      {formatUsd(amountUsd, { compact })}
     </Text>
   );
 }

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState, useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,49 +10,164 @@ import IncomeExpenseCard from '@/components/home/IncomeExpenseCard';
 import InsightsSection from '@/components/home/InsightsSection';
 import SafeToSpendCard from '@/components/home/SafeToSpendCard';
 import SpendingChart from '@/components/home/SpendingChart';
+import type { ChartPoint } from '@/components/home/SpendingChart';
 import TransactionList from '@/components/home/TransactionList';
 import AppHeader from '@/components/layout/AppHeader';
 import { Colors } from '@/constants/theme';
-import { useTransactions } from '@/context/transactions-context';
-import { dashboardMock, HOME_RECENT_TRANSACTION_COUNT } from '@/data/dashboard-mock';
+import { useStore } from '@/store/useStore';
+import { HOME_RECENT_TRANSACTION_COUNT } from '@/data/dashboard-mock';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MAX_WEEK_OFFSET = 3; // Can go back 4 weeks total (0,1,2,3)
+
+/** Returns a YYYY-MM-DD string in local time */
+function toLocalDateKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Build 7-day window: weekOffset=0 means this week (Mon-Sun containing today) */
+function buildWeekDays(weekOffset: number): { dateKey: string; label: string }[] {
+  const today = new Date();
+  // Find the Monday of the current week
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const thisMonday = new Date(today);
+  thisMonday.setDate(today.getDate() + mondayOffset);
+  thisMonday.setHours(0, 0, 0, 0);
+
+  // Go back by weekOffset weeks
+  const startMonday = new Date(thisMonday);
+  startMonday.setDate(thisMonday.getDate() - weekOffset * 7);
+
+  const days: { dateKey: string; label: string }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startMonday);
+    d.setDate(startMonday.getDate() + i);
+    const dayIndex = d.getDay();
+    days.push({
+      dateKey: toLocalDateKey(d.toISOString()),
+      label: DAY_NAMES[dayIndex],
+    });
+  }
+  return days;
+}
+
+/** Format a week label like "Mar 30 – Apr 5" */
+function formatWeekLabel(weekOffset: number): string {
+  const days = buildWeekDays(weekOffset);
+  const first = new Date(days[0].dateKey + 'T00:00:00');
+  const last = new Date(days[6].dateKey + 'T00:00:00');
+  const m1 = MONTH_SHORT[first.getMonth()];
+  const m2 = MONTH_SHORT[last.getMonth()];
+  if (m1 === m2) {
+    return `${m1} ${first.getDate()}–${last.getDate()}`;
+  }
+  return `${m1} ${first.getDate()} – ${m2} ${last.getDate()}`;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { transactions } = useTransactions();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
-  const weeklySpendingData = useMemo(() => dashboardMock.spendingTrends.Week ?? [], []);
+  const transactions = useStore(state => state.transactions);
+  const fetchTransactions = useStore(state => state.fetchTransactions);
+  const fetchBudget = useStore(state => state.fetchBudget);
+  const monthlyBudget = useStore(state => state.monthlyBudget);
 
-  const { totalIncome, totalExpenses } = useMemo(() => {
-    let income = 0;
-    let expenses = 0;
-    transactions.forEach(t => {
-      if (t.amount > 0) income += t.amount;
-      else if (t.amount < 0) expenses += Math.abs(t.amount);
-    });
-    
-    // Fallback to mock data if there are no transactions available, so UI renders correctly
-    if (income === 0 && expenses === 0 && dashboardMock.incomeExpense) {
-      return { 
-        totalIncome: dashboardMock.incomeExpense.incomeUsd, 
-        totalExpenses: dashboardMock.incomeExpense.expensesUsd 
-      };
+  const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  useEffect(() => {
+    fetchTransactions();
+    fetchBudget();
+  }, []);
+
+  // Reset bar selection when week changes
+  const handleWeekChange = useCallback((newOffset: number) => {
+    setWeekOffset(newOffset);
+    setSelectedBarIndex(null);
+  }, []);
+
+  // Build current week's days
+  const weekDays = useMemo(() => buildWeekDays(weekOffset), [weekOffset]);
+  const weekLabel = useMemo(() => formatWeekLabel(weekOffset), [weekOffset]);
+
+  // Index all transactions by local date key
+  const txByDate = useMemo(() => {
+    const map: Record<string, typeof transactions> = {};
+    for (const tx of transactions) {
+      if (!tx.date) continue;
+      const key = toLocalDateKey(tx.date);
+      if (!map[key]) map[key] = [];
+      map[key].push(tx);
     }
-    
-    return { totalIncome: income, totalExpenses: expenses };
+    return map;
   }, [transactions]);
 
+  // Build chart data for the selected week
+  const chartData: ChartPoint[] = useMemo(() => {
+    return weekDays.map((day) => {
+      const dayTxs = txByDate[day.dateKey] || [];
+      const totalSpent = dayTxs
+        .filter(tx => tx.amount < 0)
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+      return {
+        value: totalSpent,
+        label: day.label,
+        amountUsd: totalSpent,
+        dateKey: day.dateKey,
+      };
+    });
+  }, [weekDays, txByDate]);
+
+  // All transactions in this week window
+  const weekDateKeys = useMemo(() => new Set(weekDays.map(d => d.dateKey)), [weekDays]);
+  const weekTransactions = useMemo(() => {
+    return transactions.filter(tx => tx.date && weekDateKeys.has(toLocalDateKey(tx.date)));
+  }, [transactions, weekDateKeys]);
+
+  // Handle bar press — toggle selection
+  const handleBarPress = useCallback((index: number) => {
+    setSelectedBarIndex(prev => prev === index ? null : index);
+  }, []);
+
+  // Determine which transactions to show based on filter
+  const filteredTransactions = useMemo(() => {
+    if (selectedBarIndex === null) return weekTransactions;
+    const selectedDateKey = weekDays[selectedBarIndex]?.dateKey;
+    if (!selectedDateKey) return weekTransactions;
+    return weekTransactions.filter(tx => tx.date && toLocalDateKey(tx.date) === selectedDateKey);
+  }, [weekTransactions, selectedBarIndex, weekDays]);
+
+  // Compute dashboard metrics based on filtered transactions
+  const totalIncome = useMemo(() => {
+    return filteredTransactions
+      .filter(tx => tx.amount > 0)
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [filteredTransactions]);
+
+  const totalExpenses = useMemo(() => {
+    return filteredTransactions
+      .filter(tx => tx.amount < 0)
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  }, [filteredTransactions]);
+
   const netBalance = totalIncome - totalExpenses;
-  const budget = 2500; // Represents standard monthly budget
+  const budget = monthlyBudget || 2500;
   const remainingBudget = Math.max(0, budget - totalExpenses);
-  
+
   const today = new Date();
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const daysLeftInMonth = Math.max(1, daysInMonth - today.getDate() + 1);
-  
-  const safeToSpend = remainingBudget / daysLeftInMonth;
+
+  const safeToSpend = selectedBarIndex !== null
+    ? remainingBudget
+    : remainingBudget / daysLeftInMonth;
+
   const potentialSavings = totalIncome - budget;
 
   return (
@@ -81,11 +196,19 @@ export default function HomeScreen() {
         <InsightsSection potentialSavingsUsd={potentialSavings} />
 
         <View style={styles.chartSection}>
-          <SpendingChart data={weeklySpendingData} />
+          <SpendingChart
+            data={chartData}
+            selectedIndex={selectedBarIndex}
+            onBarPress={handleBarPress}
+            weekOffset={weekOffset}
+            maxWeekOffset={MAX_WEEK_OFFSET}
+            onWeekChange={handleWeekChange}
+            weekLabel={weekLabel}
+          />
         </View>
 
         <TransactionList
-          transactions={transactions.slice(0, HOME_RECENT_TRANSACTION_COUNT)}
+          transactions={filteredTransactions.slice(0, HOME_RECENT_TRANSACTION_COUNT)}
           onPressSeeAll={() => router.push('/(tabs)/transaction')}
         />
 

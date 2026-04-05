@@ -1,9 +1,11 @@
+import React, { useState, useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import TransactionItem, { type Transaction } from './TransactionItem';
+import TransactionDetailModal from './TransactionDetailModal';
 
 type TransactionListProps = {
   transactions: Transaction[];
@@ -22,6 +24,16 @@ export default function TransactionList({
   const isDark = colorScheme === 'dark';
   const accent = Colors[colorScheme].primary;
 
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+
+  const handlePress = useCallback((item: Transaction) => {
+    setSelectedTx(item);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setSelectedTx(null);
+  }, []);
+
   return (
     <View>
       <View style={styles.headerRow}>
@@ -35,9 +47,15 @@ export default function TransactionList({
 
       <View style={styles.list}>
         {transactions.map((transaction) => (
-          <TransactionItem key={transaction.id} item={transaction} />
+          <TransactionItem key={transaction.id} item={transaction} onPress={handlePress} />
         ))}
       </View>
+
+      <TransactionDetailModal
+        visible={selectedTx !== null}
+        transaction={selectedTx}
+        onClose={handleClose}
+      />
     </View>
   );
 }

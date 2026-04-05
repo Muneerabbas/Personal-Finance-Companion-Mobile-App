@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
@@ -10,28 +11,37 @@ export type ChartPoint = {
   value: number;
   label: string;
   amountUsd: number;
+  /** ISO date string for this day bucket */
+  dateKey?: string;
 };
 
 type SpendingChartProps = {
   data: ChartPoint[];
+  /** Index of the currently selected (tapped) bar, or null */
+  selectedIndex?: number | null;
+  /** Called when a bar is tapped */
+  onBarPress?: (index: number) => void;
+  /** Current week offset (0 = this week, 1 = last week, ...) */
+  weekOffset?: number;
+  /** Max number of weeks user can go back */
+  maxWeekOffset?: number;
+  /** Called when user navigates weeks */
+  onWeekChange?: (offset: number) => void;
+  /** Date range label to display */
+  weekLabel?: string;
 };
 
 const BAR_CHART_HEIGHT = 140;
-const DAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
-const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
-function labelToShortUpper(label: string, index: number): string {
-  const raw = label.trim();
-  const upper = raw.toUpperCase();
-  if (upper.length <= 3 && /^[A-Z]+$/.test(upper)) {
-    return upper;
-  }
-  const match = DAY_LABELS.find((d) => upper.startsWith(d.slice(0, 2)));
-  if (match) return match;
-  return DAY_LABELS[index] ?? upper.slice(0, 3);
-}
-
-function SpendingChartInner({ data }: SpendingChartProps) {
+function SpendingChartInner({
+  data,
+  selectedIndex,
+  onBarPress,
+  weekOffset = 0,
+  maxWeekOffset = 3,
+  onWeekChange,
+  weekLabel,
+}: SpendingChartProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const mutedColor = useThemeColor({}, 'muted');
@@ -44,60 +54,90 @@ function SpendingChartInner({ data }: SpendingChartProps) {
     const out: ChartPoint[] = [...sliced];
     while (out.length < 7) {
       const i = out.length;
-      out.push({ value: 0, label: WEEKDAY_SHORT[i], amountUsd: 0 });
+      out.push({ value: 0, label: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][i], amountUsd: 0 });
     }
     return out;
   }, [data]);
 
+  // Highlight: selected bar if any, otherwise the max bar
   const highlightIndex = useMemo(() => {
+    if (selectedIndex !== null && selectedIndex !== undefined) return selectedIndex;
     let best = 0;
     for (let i = 1; i < series.length; i++) {
       if (series[i].value > series[best].value) best = i;
     }
     return best;
-  }, [series]);
+  }, [series, selectedIndex]);
 
   const bars = useMemo(() => {
     const maxV = Math.max(...series.map((d) => d.value), 1);
     return series.map((point, index) => {
-      const heightPct = Math.max(12, Math.round((point.value / maxV) * 100));
+      // Scale bar height: minimum 8% so empty days still show a tiny stub
+      const heightPct = point.value > 0
+        ? Math.max(14, Math.round((point.value / maxV) * 100))
+        : 8;
       const isHighlight = index === highlightIndex;
       return {
         key: `${point.label}-${index}`,
         heightPct,
         isHighlight,
-        shortLabel: labelToShortUpper(point.label, index),
+        shortLabel: point.label.slice(0, 3).toUpperCase(),
       };
     });
   }, [series, highlightIndex]);
 
   const inactiveBarColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)';
   const chartWellBg = isDark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.04)';
+  const hasSelection = selectedIndex !== null && selectedIndex !== undefined;
+  const canGoForward = weekOffset > 0;
+  const canGoBack = weekOffset < maxWeekOffset;
 
   return (
     <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
+      {/* Header with title and week navigation */}
       <View style={styles.headerRow}>
         <ThemedText style={styles.title}>Weekly Spending</ThemedText>
-        <ThemedText style={[styles.rangeCaps, { color: primaryColor }]}>Last 7 days</ThemedText>
+        <View style={styles.weekNav}>
+          <Pressable
+            onPress={() => canGoBack && onWeekChange?.(weekOffset + 1)}
+            hitSlop={10}
+            style={[styles.navBtn, !canGoBack && styles.navBtnDisabled]}>
+            <Ionicons name="chevron-back" size={18} color={canGoBack ? primaryColor : (isDark ? '#333' : '#ccc')} />
+          </Pressable>
+          <ThemedText style={[styles.weekLabel, { color: primaryColor }]}>
+            {weekLabel || (weekOffset === 0 ? 'This Week' : `${weekOffset}w ago`)}
+          </ThemedText>
+          <Pressable
+            onPress={() => canGoForward && onWeekChange?.(weekOffset - 1)}
+            hitSlop={10}
+            style={[styles.navBtn, !canGoForward && styles.navBtnDisabled]}>
+            <Ionicons name="chevron-forward" size={18} color={canGoForward ? primaryColor : (isDark ? '#333' : '#ccc')} />
+          </Pressable>
+        </View>
       </View>
 
+      {/* Chart */}
       <View style={[styles.chartWell, { backgroundColor: chartWellBg }]}>
         <View
           style={[styles.barsRow, { height: BAR_CHART_HEIGHT }]}
           accessible
-          accessibilityLabel="Spending by day for the last seven days">
-          {bars.map((bar) => (
-            <View key={bar.key} style={styles.barTrack}>
+          accessibilityLabel="Spending by day for the selected week">
+          {bars.map((bar, index) => (
+            <Pressable
+              key={bar.key}
+              style={styles.barTrack}
+              onPress={() => onBarPress?.(index)}>
               <View
                 style={[
                   styles.barFill,
                   {
                     height: `${bar.heightPct}%`,
                     backgroundColor: bar.isHighlight ? primaryColor : inactiveBarColor,
+                    opacity: hasSelection && !bar.isHighlight ? 0.35 : 1,
                   },
                 ]}
               />
-            </View>
+            </Pressable>
           ))}
         </View>
         <View style={styles.labelsRow}>
@@ -107,6 +147,7 @@ function SpendingChartInner({ data }: SpendingChartProps) {
                 style={[
                   styles.axisLabel,
                   { color: bar.isHighlight ? primaryColor : mutedColor },
+                  bar.isHighlight && styles.axisLabelActive,
                 ]}>
                 {bar.shortLabel}
               </ThemedText>
@@ -139,11 +180,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: -0.2,
   },
-  rangeCaps: {
+  weekNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  navBtn: {
+    padding: 4,
+  },
+  navBtnDisabled: {
+    opacity: 0.4,
+  },
+  weekLabel: {
     fontFamily: Fonts.bold,
     fontSize: 10,
-    letterSpacing: 1.4,
+    letterSpacing: 1,
     textTransform: 'uppercase',
+    minWidth: 70,
+    textAlign: 'center',
   },
   chartWell: {
     borderRadius: 20,
@@ -183,5 +237,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
+  },
+  axisLabelActive: {
+    fontFamily: Fonts.bold,
   },
 });

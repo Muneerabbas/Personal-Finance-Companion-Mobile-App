@@ -17,7 +17,7 @@ type CurrencyContextValue = {
   convertUsdToDisplay: (amountUsd: number) => number;
   /** User input in selected currency → USD for storage. */
   convertDisplayToUsd: (amountDisplay: number) => number;
-  formatUsd: (amountUsd: number, options?: { minFrac?: number; maxFrac?: number }) => string;
+  formatUsd: (amountUsd: number, options?: { minFrac?: number; maxFrac?: number; compact?: boolean }) => string;
   currencySymbol: string;
 };
 
@@ -146,10 +146,22 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   );
 
   const formatUsd = useCallback(
-    (amountUsd: number, options?: { minFrac?: number; maxFrac?: number }) => {
+    (amountUsd: number, options?: { minFrac?: number; maxFrac?: number; compact?: boolean }) => {
       const minFrac = options?.minFrac ?? 2;
       const maxFrac = options?.maxFrac ?? 2;
+      const compact = options?.compact ?? false;
       const display = convertUsdToDisplay(amountUsd);
+      
+      if (compact && Math.abs(display) >= 1000) {
+        const absVal = Math.abs(display);
+        const kVal = absVal / 1000;
+        const sym = symbolForCode(selectedCode);
+        const formatted = kVal >= 10 
+          ? `${sym}${Math.round(kVal)}k`
+          : `${sym}${kVal.toFixed(1).replace(/\.0$/, '')}k`;
+        return display < 0 ? `-${formatted}` : formatted;
+      }
+      
       return formatWithIntl(display, selectedCode, minFrac, maxFrac);
     },
     [convertUsdToDisplay, selectedCode],
