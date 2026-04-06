@@ -2,8 +2,8 @@ import React, { useState, useRef } from 'react';
 import { View, StyleSheet, Dimensions, FlatList, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/context/auth-context';
 import { Slide1 } from '@/components/onboarding/Slide1';
 import { Slide2 } from '@/components/onboarding/Slide2';
 import { Slide3 } from '@/components/onboarding/Slide3';
@@ -27,6 +27,7 @@ export default function Onboarding() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const router = useRouter();
+  const { completeOnboarding } = useAuth();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const c = getOnboardingColors(colorScheme);
@@ -35,14 +36,14 @@ export default function Onboarding() {
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
     } else {
-      await AsyncStorage.setItem('hasFinishedOnboarding', 'true');
-      router.replace('/(tabs)');
+      await completeOnboarding();
+      router.replace('/(auth)/login');
     }
   };
 
   const handleSkip = async () => {
-    await AsyncStorage.setItem('hasFinishedOnboarding', 'true');
-    router.replace('/(tabs)');
+    await completeOnboarding();
+    router.replace('/(auth)/login');
   };
 
   const handleScroll = (event: { nativeEvent: { contentOffset: { x: number } } }) => {

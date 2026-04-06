@@ -4,8 +4,8 @@ import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import PrimaryButton from '@/components/ui/primary-button';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/themed-text';
+import { useAuth } from '@/context/auth-context';
 import { getOnboardingColors } from '@/constants/onboarding-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -13,11 +13,12 @@ const { width } = Dimensions.get('window');
 
 export function Slide4() {
   const router = useRouter();
+  const { completeOnboarding } = useAuth();
   const scheme = useColorScheme() ?? 'light';
   const c = getOnboardingColors(scheme);
 
   const handleSignIn = async () => {
-    await AsyncStorage.setItem('hasFinishedOnboarding', 'true');
+    await completeOnboarding();
     router.replace('/(auth)/login');
   };
 
@@ -34,7 +35,7 @@ export function Slide4() {
       </View>
 
       <ThemedText style={[styles.subtitle, { color: c.muted }]}>
-        Take on fun saving challenges and reach your financial milestones faster than ever before.
+        Take on fun saving goals and reach your financial milestones faster than ever before.
       </ThemedText>
 
       <View style={styles.illustrationContainer}>

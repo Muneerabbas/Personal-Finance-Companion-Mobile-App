@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AddToGoalModal from '@/components/goals/AddToGoalModal';
@@ -328,7 +328,7 @@ function GoalsEmptyState({
   );
 }
 
-export default function ChallengesScreen() {
+export default function GoalsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
@@ -355,8 +355,8 @@ export default function ChallengesScreen() {
     fetchGoals();
   }, [fetchGoals]);
 
-  const pullRefreshChallenges = useCallback(() => useStore.getState().refreshAllData(), []);
-  const { refreshing, onRefresh } = usePullRefresh(pullRefreshChallenges);
+  const pullRefreshGoals = useCallback(() => useStore.getState().refreshAllData(), []);
+  const { refreshing, onRefresh } = usePullRefresh(pullRefreshGoals);
 
   const availableToAllocateUsd = Math.max(0, netBalance);
 
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
   scrollContentGrow: { flexGrow: 1 },
   pageTitleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
     marginTop: 4,
@@ -619,7 +619,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 4,
   },
-  addGoalHeaderBtnText: { fontFamily: Fonts.bold, fontSize: 14 },
+  addGoalHeaderBtnText: {
+    fontFamily: Fonts.bold,
+    fontSize: 14,
+    ...Platform.select({
+      ios: { lineHeight: 17, paddingTop: 0, paddingBottom: 0 },
+      default: {},
+    }),
+  },
   availableStrip: {
     borderRadius: 16,
     borderWidth: 1,

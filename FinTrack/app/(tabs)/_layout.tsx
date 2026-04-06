@@ -150,9 +150,9 @@ export default function TabLayout() {
         />
        
        <Tabs.Screen
-          name="challenges"
+          name="goals"
           options={{
-            title: 'Challenges',
+            title: 'Goals',
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabIcon focused={focused}>
                 <ProfileTabIcon color={String(color)} size={29} />

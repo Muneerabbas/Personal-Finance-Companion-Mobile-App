@@ -3,21 +3,30 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Alert, RefreshControl } 
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/context/auth-context';
+import { useThemePreference, type ThemePreference } from '@/context/theme-preference-context';
 import { useStore } from '@/store/useStore';
-import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import PrimaryButton from '@/components/ui/primary-button';
 
+const THEME_OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { value: 'system', label: 'System', icon: 'phone-portrait-outline' },
+  { value: 'light', label: 'Light', icon: 'sunny-outline' },
+  { value: 'dark', label: 'Dark', icon: 'moon-outline' },
+];
+
 export default function ProfileScreen() {
   const user = useStore((state) => state.user);
   const fetchUser = useStore((state) => state.fetchUser);
   const refreshAllData = useStore((state) => state.refreshAllData);
-  const colorScheme = useColorScheme() ?? 'light';
+  const { signOut } = useAuth();
+  const { preference, setPreference } = useThemePreference();
+  const colorScheme = useColorScheme();
   const theme = Colors[colorScheme];
   const router = useRouter();
-  
+
   const [loading, setLoading] = useState(false);
 
   const refreshProfile = useCallback(async () => {
@@ -27,7 +36,7 @@ export default function ProfileScreen() {
 
   const handleSignOut = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signOut();
+    const { error } = await signOut();
     setLoading(false);
     if (error) {
       Alert.alert('Error signing out', error.message);
@@ -36,7 +45,12 @@ export default function ProfileScreen() {
     }
   };
 
-  const name = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'User';
+  const name =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.user_metadata?.first_name ||
+    user?.email?.split('@')[0] ||
+    'User';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
@@ -47,7 +61,7 @@ export default function ProfileScreen() {
         <Text style={[styles.headerTitle, { color: theme.text }]}>Profile</Text>
         <View style={{ width: 24 }} />
       </View>
-      
+
       <ScrollView
         contentContainerStyle={[styles.content, styles.scrollContentGrow]}
         alwaysBounceVertical
@@ -69,19 +83,37 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.muted }]}>Account Settings</Text>
-          
-          <Pressable style={[styles.row, { borderBottomColor: theme.border }]} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
-            <Ionicons name="mail-outline" size={22} color={theme.text} />
-            <Text style={[styles.rowText, { color: theme.text }]}>Edit Profile Details</Text>
-            <Ionicons name="chevron-forward" size={20} color={theme.muted} />
-          </Pressable>
-
-          <Pressable style={[styles.row, { borderBottomColor: theme.border }]} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
-            <Ionicons name="lock-closed-outline" size={22} color={theme.text} />
-            <Text style={[styles.rowText, { color: theme.text }]}>Change Password</Text>
-            <Ionicons name="chevron-forward" size={20} color={theme.muted} />
-          </Pressable>
+          <Text style={[styles.sectionTitle, { color: theme.muted }]}>Appearance</Text>
+          <Text style={[styles.sectionHint, { color: theme.muted }]}>
+            Choose how FinTrack looks. System follows your device setting.
+          </Text>
+          {THEME_OPTIONS.map((opt, index) => {
+            const selected = preference === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => setPreference(opt.value)}
+                style={[
+                  styles.row,
+                  {
+                    borderBottomColor: theme.border,
+                    borderBottomWidth: index < THEME_OPTIONS.length - 1 ? StyleSheet.hairlineWidth : 0,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${opt.label} theme`}
+                accessibilityHint={selected ? 'Selected' : `Switch to ${opt.label} theme`}>
+                <Ionicons name={opt.icon} size={22} color={theme.text} />
+                <Text style={[styles.rowText, { color: theme.text }]}>{opt.label}</Text>
+                {selected ? (
+                  <Ionicons name="checkmark-circle" size={22} color={theme.primary} />
+                ) : (
+                  <View style={styles.rowTrailingSpacer} />
+                )}
+              </Pressable>
+            );
+          })}
         </View>
 
         <View style={styles.buttonContainer}>
@@ -144,21 +176,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 1,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  sectionHint: {
+    fontFamily: Fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
     marginBottom: 8,
     marginLeft: 4,
+    marginRight: 4,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 18,
     paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowText: {
     flex: 1,
     fontFamily: Fonts.sans,
     fontSize: 16,
     marginLeft: 12,
+  },
+  rowTrailingSpacer: {
+    width: 22,
+    height: 22,
   },
   buttonContainer: {
     marginTop: 20,

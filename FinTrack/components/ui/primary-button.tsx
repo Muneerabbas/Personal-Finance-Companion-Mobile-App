@@ -1,15 +1,16 @@
 import React, { type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleProp,
   StyleSheet,
+  Text,
   TextStyle,
   View,
   ViewStyle,
 } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -61,9 +62,13 @@ export default function PrimaryButton({
         <ActivityIndicator color={isOutline ? theme.primary : '#FFFFFF'} />
       ) : (
         <View style={styles.row}>
-          {leftAccessory}
-          <ThemedText style={[styles.label, { color: labelColor }, textStyle]}>{title}</ThemedText>
-          {rightAccessory}
+          {leftAccessory != null ? <View style={styles.accessorySlot}>{leftAccessory}</View> : null}
+          <Text
+            style={[styles.label, { color: labelColor }, Platform.OS === 'ios' && styles.labelIos, textStyle]}
+            numberOfLines={1}>
+            {title}
+          </Text>
+          {rightAccessory != null ? <View style={styles.accessorySlot}>{rightAccessory}</View> : null}
         </View>
       )}
     </Pressable>
@@ -83,8 +88,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
+  /** Keeps vector icons vertically centered with the label on iOS. */
+  accessorySlot: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   label: {
     fontFamily: Fonts.semiBold,
     fontSize: 18,
+    margin: 0,
+    padding: 0,
+    textAlign: 'center',
+  },
+  labelIos: {
+    lineHeight: 22,
   },
 });

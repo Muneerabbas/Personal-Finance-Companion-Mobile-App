@@ -267,7 +267,3 @@ export const useStore = create<AppState>((set, get) => ({
     return net;
   }
 }));
-
-supabase.auth.onAuthStateChange((_event, session) => {
-  useStore.setState({ user: session?.user ?? null });
-});

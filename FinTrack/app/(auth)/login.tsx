@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { AuthKeyboardScreen } from '@/components/auth/AuthKeyboardScreen';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -30,11 +31,8 @@ export default function Login() {
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.content}>
+    <AuthKeyboardScreen backgroundColor={colors.background}>
+      <View>
         <Text style={[styles.title, { color: colors.text, fontFamily: Fonts.bold }]}>Welcome Back</Text>
         <Text style={[styles.subtitle, { color: colors.muted, fontFamily: Fonts.sans }]}>Log in to continue to FinTrack</Text>
 
@@ -71,19 +69,11 @@ export default function Login() {
           <Text style={[styles.linkText, { color: colors.link, fontFamily: Fonts.semiBold }]}>Don't have an account? Sign Up</Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </AuthKeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
   title: {
     fontSize: 32,
     marginBottom: 8,

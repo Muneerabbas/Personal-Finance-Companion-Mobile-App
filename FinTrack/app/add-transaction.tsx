@@ -54,6 +54,7 @@ export default function AddTransactionScreen() {
   const [wallet, setWallet] = useState<string | null>(null);
   const [customWallet, setCustomWallet] = useState('');
   const [repeat, setRepeat] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const onCategoryChange = (c: string) => {
     setCategory(c);
@@ -102,6 +103,7 @@ export default function AddTransactionScreen() {
       wallet: walletLabel,
     });
 
+    setSubmitting(true);
     try {
       await addTransaction(payload);
       setTimeout(() => {
@@ -113,6 +115,8 @@ export default function AddTransactionScreen() {
       }, 0);
     } catch {
       Alert.alert('Could not save', 'Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -224,7 +228,13 @@ export default function AddTransactionScreen() {
           </View>
         </ScrollView>
 
-        <PrimaryButton title="Continue" onPress={submit} style={styles.continueButton} />
+        <PrimaryButton
+          title="Continue"
+          onPress={submit}
+          style={styles.continueButton}
+          loading={submitting}
+          disabled={submitting}
+        />
       </View>
     </SafeAreaView>
   );
