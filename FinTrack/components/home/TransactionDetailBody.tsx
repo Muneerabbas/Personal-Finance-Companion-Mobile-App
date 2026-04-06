@@ -1,27 +1,19 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
 import { CurrencyText } from '@/components/currency-text';
+import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
 import {
   getCategoryDisplayLabel,
   GOAL_ALLOCATION_DISPLAY_LABEL,
   isGoalAllocationCategory,
 } from '@/constants/transaction-category-styles';
-import { BottomSheetScrollView, renderSheetBackdrop } from '@/context/bottom-sheet-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { Transaction } from './TransactionItem';
 
-type TransactionDetailModalProps = {
-  visible: boolean;
-  transaction: Transaction | null;
-  onClose: () => void;
-};
-
-function formatFullDate(dateStr?: string): string {
+export function formatTransactionDetailDate(dateStr?: string): string {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
   return d.toLocaleDateString('en-US', {
@@ -32,7 +24,7 @@ function formatFullDate(dateStr?: string): string {
   });
 }
 
-function formatFullTime(dateStr?: string): string {
+export function formatTransactionDetailTime(dateStr?: string): string {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
   return d.toLocaleTimeString('en-US', {
@@ -43,7 +35,7 @@ function formatFullTime(dateStr?: string): string {
   });
 }
 
-function TransactionDetailBody({ transaction: tx }: { transaction: Transaction }) {
+export function TransactionDetailBodyContent({ transaction: tx }: { transaction: Transaction }) {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme];
@@ -98,8 +90,8 @@ function TransactionDetailBody({ transaction: tx }: { transaction: Transaction }
       value: (isGoalAllocation ? 'Goal' : tx.paymentMethod || '—').toUpperCase(),
       icon: 'card-outline',
     },
-    { label: 'Date', value: formatFullDate(tx.date), icon: 'calendar-outline' },
-    { label: 'Time', value: formatFullTime(tx.date), icon: 'time-outline' },
+    { label: 'Date', value: formatTransactionDetailDate(tx.date), icon: 'calendar-outline' },
+    { label: 'Time', value: formatTransactionDetailTime(tx.date), icon: 'time-outline' },
     {
       label: 'Type',
       value: isGoalAllocation ? GOAL_ALLOCATION_DISPLAY_LABEL : isExpense ? 'Expense' : 'Income',
@@ -108,7 +100,7 @@ function TransactionDetailBody({ transaction: tx }: { transaction: Transaction }
   ];
 
   return (
-    <BottomSheetScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <>
       <View style={styles.heroSection}>
         <View style={[styles.heroIcon, { backgroundColor: iconBg }]}>
           <Ionicons name={iconName} size={36} color={iconCol} />
@@ -150,7 +142,7 @@ function TransactionDetailBody({ transaction: tx }: { transaction: Transaction }
               <Ionicons name={row.icon} size={18} color={theme.muted} style={{ marginRight: 10 }} />
               <ThemedText style={[styles.detailLabel, { color: theme.muted }]}>{row.label}</ThemedText>
             </View>
-            <ThemedText style={[styles.detailValue, { color: theme.text }]} numberOfLines={1}>
+            <ThemedText style={[styles.detailValue, { color: theme.text }]} numberOfLines={2}>
               {row.value}
             </ThemedText>
           </View>
@@ -158,64 +150,11 @@ function TransactionDetailBody({ transaction: tx }: { transaction: Transaction }
       </View>
 
       <ThemedText style={[styles.txId, { color: isDark ? '#4B5068' : '#9CA3AF' }]}>ID: {tx.id}</ThemedText>
-    </BottomSheetScrollView>
-  );
-}
-
-export default function TransactionDetailModal({ visible, transaction, onClose }: TransactionDetailModalProps) {
-  const sheetRef = useRef<BottomSheetModal>(null);
-  const colorScheme = useColorScheme() ?? 'light';
-  const isDark = colorScheme === 'dark';
-
-  const snapPoints = useMemo(() => ['78%', '95%'], []);
-  const renderBackdrop = useCallback(renderSheetBackdrop, []);
-
-  useEffect(() => {
-    if (visible && transaction) {
-      sheetRef.current?.present();
-    } else {
-      sheetRef.current?.dismiss();
-    }
-  }, [visible, transaction]);
-
-  const handleDismiss = useCallback(() => {
-    onClose();
-  }, [onClose]);
-
-  return (
-    <BottomSheetModal
-      ref={sheetRef}
-      name="transactionDetail"
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      onDismiss={handleDismiss}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: isDark ? '#13172A' : '#FFFFFF' }}
-      handleIndicatorStyle={{ backgroundColor: isDark ? '#3A3F55' : '#D1D5DB' }}>
-      <Pressable style={styles.closeBtn} onPress={() => sheetRef.current?.dismiss()} hitSlop={12}>
-        <Ionicons name="close" size={24} color={Colors[colorScheme].muted} />
-      </Pressable>
-      {transaction ? <TransactionDetailBody transaction={transaction} /> : <View style={styles.emptyStub} />}
-    </BottomSheetModal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  emptyStub: {
-    minHeight: 1,
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 16,
-    zIndex: 10,
-    padding: 4,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 36,
-    paddingBottom: 28,
-  },
   heroSection: {
     alignItems: 'center',
     marginBottom: 28,
@@ -263,10 +202,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
+    gap: 12,
   },
   detailLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
   },
   detailLabel: {
     fontFamily: Fonts.sans,
@@ -275,7 +216,7 @@ const styles = StyleSheet.create({
   detailValue: {
     fontFamily: Fonts.semiBold,
     fontSize: 14,
-    maxWidth: '55%',
+    flex: 1,
     textAlign: 'right',
   },
   txId: {

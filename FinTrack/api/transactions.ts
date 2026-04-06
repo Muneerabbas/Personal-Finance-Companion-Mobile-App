@@ -54,6 +54,53 @@ export const addTransaction = async (payload: TransactionPayload) => {
   return mapDbToApiTransaction(data);
 };
 
+export const deleteTransactionById = async (id: string) => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id);
+  if (error) {
+    console.error('Error deleting transaction:', error);
+    throw error;
+  }
+};
+
+export const updateTransactionById = async (id: string, payload: TransactionPayload) => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const parsedRow = mapPayloadToUITransaction(payload);
+  const dbPayload = {
+    title: parsedRow.title,
+    amount: parsedRow.amount,
+    category: parsedRow.category,
+    payment_method: parsedRow.paymentMethod || 'Cash',
+    icon: parsedRow.icon,
+    icon_background: parsedRow.iconBackground,
+    icon_color: parsedRow.iconColor,
+    is_other_category: parsedRow.isOtherCategory || false,
+  };
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .update(dbPayload)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating transaction:', error);
+    throw error;
+  }
+
+  return mapDbToApiTransaction(data);
+};
+
 function mapDbToApiTransaction(dbItem: any) {
   return {
     id: dbItem.id,

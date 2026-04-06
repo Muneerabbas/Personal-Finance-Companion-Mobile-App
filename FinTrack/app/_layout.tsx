@@ -15,6 +15,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
+import { AppAlertProvider } from '@/context/app-alert-context';
 import { BottomSheetProvider } from '@/context/bottom-sheet-context';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { CurrencyProvider } from '@/context/currency-context';
@@ -92,6 +93,7 @@ function RootStack() {
                 primary: theme.primary,
               },
             }}>
+            <AppAlertProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="onboarding" options={{ headerShown: false }} />
@@ -99,9 +101,11 @@ function RootStack() {
               <Stack.Screen name="profile" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="goals-overview" options={{ headerShown: false }} />
+              <Stack.Screen name="transaction-detail" options={{ headerShown: false }} />
               <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
             </Stack>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+            </AppAlertProvider>
           </ThemeProvider>
         </PaperProvider>
       </BottomSheetProvider>

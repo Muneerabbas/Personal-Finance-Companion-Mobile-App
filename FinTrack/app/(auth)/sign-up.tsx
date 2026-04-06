@@ -1,27 +1,45 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+
+import { AuthFormField } from '@/components/auth/AuthFormField';
 import { AuthKeyboardScreen } from '@/components/auth/AuthKeyboardScreen';
+import { useAppAlert } from '@/context/app-alert-context';
+import {
+  canSubmitSignUp,
+  signUpEmailError,
+  signUpNameError,
+  signUpPasswordError,
+} from '@/lib/auth-field-validation';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import PrimaryButton from '@/components/ui/primary-button';
 
 export default function SignUp() {
+  const { showAlert } = useAppAlert();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [nameTyped, setNameTyped] = useState(false);
+  const [emailTyped, setEmailTyped] = useState(false);
+  const [passwordTyped, setPasswordTyped] = useState(false);
   const router = useRouter();
-  const theme = useColorScheme() ?? 'light';
-  const colors = Colors[theme];
+  const scheme = useColorScheme() ?? 'light';
+  const colors = Colors[scheme];
+  const isDark = scheme === 'dark';
+
+  const errorColor = isDark ? '#F87171' : '#DC2626';
+  const nameError = useMemo(() => signUpNameError(name, nameTyped), [name, nameTyped]);
+  const emailError = useMemo(() => signUpEmailError(email, emailTyped), [email, emailTyped]);
+  const passwordError = useMemo(() => signUpPasswordError(password, passwordTyped), [password, passwordTyped]);
+  const formValid = canSubmitSignUp(name, email, password);
 
   async function signUpWithEmail() {
+    if (!formValid) return;
     const trimmedName = name.trim();
-    if (!trimmedName) {
-      Alert.alert('Name', 'Please enter your name.');
-      return;
-    }
     setLoading(true);
     const firstName = trimmedName.split(/\s+/)[0] || trimmedName;
     const {
@@ -29,7 +47,7 @@ export default function SignUp() {
       error,
     } = await supabase.auth.signUp({
       email: email.trim(),
-      password: password,
+      password,
       options: {
         data: {
           full_name: trimmedName,
@@ -40,108 +58,175 @@ export default function SignUp() {
     });
 
     if (error) {
-      Alert.alert('Sign Up Failed', error.message);
+      showAlert({ title: 'Sign Up Failed', message: error.message });
       setLoading(false);
     } else {
       if (!session) {
-        Alert.alert('Please check your inbox for email verification!');
+        showAlert({ title: 'Check your email', message: 'Please check your inbox for email verification.' });
         setLoading(false);
       } else {
-         router.replace('/(tabs)');
+        router.replace('/(tabs)');
       }
     }
   }
 
   return (
     <AuthKeyboardScreen backgroundColor={colors.background}>
-      <View>
-        <Text style={[styles.title, { color: colors.text, fontFamily: Fonts.bold }]}>Create Account</Text>
-        <Text style={[styles.subtitle, { color: colors.muted, fontFamily: Fonts.sans }]}>Sign up to start tracking your finances</Text>
+      <View style={styles.page}>
+        <View style={[styles.heroBadge, { backgroundColor: isDark ? 'rgba(139,124,255,0.15)' : 'rgba(127,61,255,0.1)' }]}>
+          <Ionicons name="person-add-outline" size={28} color={colors.primary} />
+        </View>
+        <Text style={[styles.title, { color: colors.text }]}>Create account</Text>
+        <Text style={[styles.subtitle, { color: colors.muted }]}>
+          Start organizing income, spending, and goals in one place.
+        </Text>
 
-        <View style={styles.inputContainer}>
-          <Text style={[styles.label, { color: colors.text, fontFamily: Fonts.rounded }]}>Name</Text>
-          <TextInput
-            style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card, fontFamily: Fonts.sans }]}
-            onChangeText={setName}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              shadowColor: isDark ? '#000' : '#1F1B2F',
+            },
+          ]}>
+          <AuthFormField
+            label="Full name"
             value={name}
-            placeholder="Your name"
-            placeholderTextColor={colors.muted}
+            onChangeText={(t) => {
+              setName(t);
+              setNameTyped(true);
+            }}
+            error={nameError}
+            placeholder="Jane Doe"
             autoCapitalize="words"
             autoCorrect={false}
             textContentType="name"
+            textColor={colors.text}
+            mutedColor={colors.muted}
+            borderColor={colors.border}
+            backgroundColor={isDark ? '#131827' : '#FAFAFA'}
+            errorColor={errorColor}
           />
+
+          <View style={styles.fieldGap}>
+            <AuthFormField
+              label="Email"
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                setEmailTyped(true);
+              }}
+              error={emailError}
+              placeholder="you@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              textColor={colors.text}
+              mutedColor={colors.muted}
+              borderColor={colors.border}
+              backgroundColor={isDark ? '#131827' : '#FAFAFA'}
+              errorColor={errorColor}
+            />
+          </View>
+
+          <View style={styles.fieldGap}>
+            <AuthFormField
+              label="Password"
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                setPasswordTyped(true);
+              }}
+              error={passwordError}
+              placeholder="At least 6 characters"
+              secureTextEntry
+              autoCapitalize="none"
+              textContentType="newPassword"
+              textColor={colors.text}
+              mutedColor={colors.muted}
+              borderColor={colors.border}
+              backgroundColor={isDark ? '#131827' : '#FAFAFA'}
+              errorColor={errorColor}
+            />
+          </View>
+
+          <View style={styles.cta}>
+            <PrimaryButton
+              title="Create account"
+              onPress={signUpWithEmail}
+              disabled={loading || !formValid}
+              loading={loading}
+            />
+          </View>
         </View>
 
-        <View style={[styles.inputContainer, styles.mt20]}>
-          <Text style={[styles.label, { color: colors.text, fontFamily: Fonts.rounded }]}>Email</Text>
-          <TextInput
-            style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card, fontFamily: Fonts.sans }]}
-            onChangeText={(text) => setEmail(text)}
-            value={email}
-            placeholder="email@address.com"
-            placeholderTextColor={colors.muted}
-            autoCapitalize={'none'}
-          />
-        </View>
-
-        <View style={[styles.inputContainer, styles.mt20]}>
-          <Text style={[styles.label, { color: colors.text, fontFamily: Fonts.rounded }]}>Password</Text>
-          <TextInput
-            style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.card, fontFamily: Fonts.sans }]}
-            onChangeText={(text) => setPassword(text)}
-            value={password}
-            secureTextEntry={true}
-            placeholder="Password"
-            placeholderTextColor={colors.muted}
-            autoCapitalize={'none'}
-          />
-        </View>
-
-        <View style={[styles.mt20, styles.pt20]}>
-          <PrimaryButton title="Sign Up" onPress={signUpWithEmail} disabled={loading} loading={loading} />
-        </View>
-
-        <TouchableOpacity style={styles.linkButton} onPress={() => router.push('/login')}>
-          <Text style={[styles.linkText, { color: colors.link, fontFamily: Fonts.semiBold }]}>Already have an account? Sign In</Text>
-        </TouchableOpacity>
+        <Pressable style={styles.linkWrap} onPress={() => router.push('/login')} hitSlop={12}>
+          <Text style={[styles.linkMuted, { color: colors.muted }]}>Already have an account? </Text>
+          <Text style={[styles.linkAccent, { color: colors.primary }]}>Sign in</Text>
+        </Pressable>
       </View>
     </AuthKeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  page: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+  },
+  heroBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
   title: {
-    fontSize: 32,
+    fontFamily: Fonts.bold,
+    fontSize: 30,
+    letterSpacing: -0.5,
     marginBottom: 8,
   },
   subtitle: {
+    fontFamily: Fonts.sans,
     fontSize: 16,
-    marginBottom: 40,
+    lineHeight: 24,
+    marginBottom: 28,
   },
-  inputContainer: {
-    width: '100%',
-  },
-  label: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  input: {
+  card: {
+    borderRadius: 24,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
+    padding: 22,
+    marginBottom: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 4,
   },
-  mt20: {
-    marginTop: 20,
+  fieldGap: {
+    marginTop: 4,
   },
-  pt20: {
-    paddingTop: 20,
+  cta: {
+    marginTop: 12,
   },
-  linkButton: {
-    marginTop: 24,
+  linkWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 28,
+    paddingVertical: 8,
   },
-  linkText: {
-    fontSize: 14,
+  linkMuted: {
+    fontFamily: Fonts.sans,
+    fontSize: 15,
+  },
+  linkAccent: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 15,
   },
 });

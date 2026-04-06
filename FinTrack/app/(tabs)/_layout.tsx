@@ -1,18 +1,7 @@
 import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useEffect } from 'react';
+import { InteractionManager, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  Easing,
-  Extrapolate,
-  interpolate,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { Colors, Fonts } from '@/constants/theme';
@@ -24,43 +13,33 @@ import {
   ProfileTabIcon,
   TransactionTabIcon,
 } from '@/components/ui/tab-icons';
+import { useStore } from '@/store/useStore';
 
-type AnimatedTabIconProps = {
+type TabIconProps = {
   focused: boolean;
   children: React.ReactNode;
   isAddButton?: boolean;
 };
 
-function AnimatedTabIcon({
-  focused,
-  children,
-  isAddButton = false,
-}: AnimatedTabIconProps) {
-  const progress = useSharedValue(focused ? 1 : 0);
-
-  useEffect(() => {
-    progress.value = withTiming(focused ? 1 : 0, {
-      duration: 180,
-      easing: Easing.out(Easing.quad),
-    });
-  }, [focused, progress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: isAddButton ? 0.9 + progress.value * 0.1 : 0.55 + progress.value * 0.45,
-  }));
-
-  return <Animated.View style={[styles.iconWrap, animatedStyle]}>{children}</Animated.View>;
+/** Instant opacity — no Reanimated timing on tab change (keeps tab switch snappy). */
+function TabIconShell({ focused, children, isAddButton = false }: TabIconProps) {
+  const opacity = isAddButton ? (focused ? 1 : 0.9) : focused ? 1 : 0.55;
+  return <View style={[styles.iconWrap, { opacity }]}>{children}</View>;
 }
-
-const FAB_SPRING_OPEN = { damping: 18, stiffness: 260, mass: 0.85 };
-const FAB_SPRING_CLOSE = { damping: 22, stiffness: 280, mass: 0.9 };
 
 export default function TabLayout() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
-  
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      void useStore.getState().refreshAllData();
+    });
+    return () => task.cancel();
+  }, []);
+
   const safeBottomInset = Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 10);
   const tabBarBottom = 0;
   const tabBarHeight = 92 + safeBottomInset;
@@ -74,11 +53,15 @@ export default function TabLayout() {
   return (
     <View style={styles.container}>
       <Tabs
+        detachInactiveScreens={false}
         screenOptions={{
           tabBarActiveTintColor: theme.tabIconSelected,
           tabBarInactiveTintColor: theme.tabIconDefault,
           headerShown: false,
-          animation: 'fade',
+          lazy: false,
+          animation: 'none',
+          /** Inactive tabs skip re-renders while off-screen — faster tab switches under store updates. */
+          freezeOnBlur: true,
           tabBarButton: HapticTab,
           tabBarStyle: [
             styles.tabBar,
@@ -112,20 +95,20 @@ export default function TabLayout() {
           options={{
             title: 'Home',
             tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon focused={focused}>
+              <TabIconShell focused={focused}>
                 <HomeTabIcon color={String(color)} size={29} />
-              </AnimatedTabIcon>
+              </TabIconShell>
             ),
           }}
         />
-         <Tabs.Screen
+        <Tabs.Screen
           name="budget"
           options={{
             title: 'Insights',
             tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon focused={focused}>
+              <TabIconShell focused={focused}>
                 <BudgetTabIcon color={String(color)} size={29} />
-              </AnimatedTabIcon>
+              </TabIconShell>
             ),
           }}
         />
@@ -148,34 +131,32 @@ export default function TabLayout() {
             tabBarLabel: () => null,
           }}
         />
-       
-       <Tabs.Screen
+
+        <Tabs.Screen
           name="goals"
           options={{
             title: 'Goals',
             tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon focused={focused}>
+              <TabIconShell focused={focused}>
                 <ProfileTabIcon color={String(color)} size={29} />
-              </AnimatedTabIcon>
+              </TabIconShell>
             ),
           }}
         />
-            <Tabs.Screen
+        <Tabs.Screen
           name="transaction"
           options={{
             title: 'Transaction',
             tabBarIcon: ({ color, focused }) => (
-              <AnimatedTabIcon focused={focused}>
+              <TabIconShell focused={focused}>
                 <TransactionTabIcon color={String(color)} size={29} />
-              </AnimatedTabIcon>
+              </TabIconShell>
             ),
           }}
         />
       </Tabs>
 
-
-
-      <Animated.View
+      <View
         style={[
           styles.centerButton,
           {
@@ -187,11 +168,9 @@ export default function TabLayout() {
           accessibilityRole="button"
           onPress={toggleFab}
           style={styles.centerButtonHit}>
-          <Animated.View>
-            <PlusTabIcon color="#FFFFFF" size={32} />
-          </Animated.View>
+          <PlusTabIcon color="#FFFFFF" size={32} />
         </Pressable>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -239,13 +218,6 @@ const styles = StyleSheet.create({
   addTabSpacer: {
     width: 84,
   },
-  backdropHit: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backdropFill: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0F0B1A',
-  },
   centerButton: {
     position: 'absolute',
     alignSelf: 'center',
@@ -265,42 +237,5 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  actionCluster: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 110,
-    pointerEvents: 'box-none',
-  },
-  actionButton: {
-    position: 'absolute',
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#1F1B2F',
-    shadowOpacity: 0.16,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 12,
-  },
-  actionHit: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionBlueBase: {
-    backgroundColor: '#1A73E8',
-  },
-  actionGreenBase: {
-    backgroundColor: '#13B36B',
-  },
-  actionRedBase: {
-    backgroundColor: '#FF4D5E',
   },
 });

@@ -86,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       transactions: [],
       goals: [],
       monthlyBudget: null,
+      isInitialSyncComplete: false,
+      syncInProgress: false,
     });
     return { error };
   }, []);

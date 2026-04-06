@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppAlert } from '@/context/app-alert-context';
 import { useAuth } from '@/context/auth-context';
 import { useThemePreference, type ThemePreference } from '@/context/theme-preference-context';
 import { useStore } from '@/store/useStore';
@@ -18,6 +19,7 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof
 ];
 
 export default function ProfileScreen() {
+  const { showAlert } = useAppAlert();
   const user = useStore((state) => state.user);
   const fetchUser = useStore((state) => state.fetchUser);
   const refreshAllData = useStore((state) => state.refreshAllData);
@@ -39,7 +41,7 @@ export default function ProfileScreen() {
     const { error } = await signOut();
     setLoading(false);
     if (error) {
-      Alert.alert('Error signing out', error.message);
+      showAlert({ title: 'Error signing out', message: error.message });
     } else {
       router.replace('/(auth)/login');
     }

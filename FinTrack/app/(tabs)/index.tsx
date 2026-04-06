@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useEffect, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,6 +12,7 @@ import SpendingChart from '@/components/home/SpendingChart';
 import type { ChartPoint } from '@/components/home/SpendingChart';
 import TransactionList from '@/components/home/TransactionList';
 import AppHeader from '@/components/layout/AppHeader';
+import { HomeScreenSkeleton } from '@/components/skeletons/screen-skeletons';
 import { Colors } from '@/constants/theme';
 import { isSpendingExpense } from '@/constants/transaction-category-styles';
 import { useStore } from '@/store/useStore';
@@ -74,25 +75,19 @@ function formatWeekLabel(weekOffset: number): string {
   return `${m1} ${first.getDate()} – ${m2} ${last.getDate()}`;
 }
 
-export default function HomeScreen() {
+/** Heavy dashboard: only mounts after initial sync so other tabs stay cheap while loading. */
+function HomeScreenLoaded() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
   const transactions = useStore(state => state.transactions);
-  const refreshAllData = useStore(state => state.refreshAllData);
   const monthlyBudget = useStore(state => state.monthlyBudget);
 
   /** ON: income/expenses for this week through today. OFF: one day at a time (defaults to today). */
   const [toDateEnabled, setToDateEnabled] = useState(true);
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
-
-  useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
-
-  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
 
   const handleWeekChange = useCallback((newOffset: number) => {
     setWeekOffset(newOffset);
@@ -229,8 +224,10 @@ export default function HomeScreen() {
   }, [filteredTransactions]);
 
   const netBalanceAllTime = useStore((state) => state.getNetBalance());
+  const spentThisCalendarMonth = useStore((state) => state.getDiscretionarySpentThisCalendarMonth());
   const budget = monthlyBudget || 2500;
-  const remainingBudget = Math.max(0, budget - totalExpenses);
+  /** Monthly cap vs month-to-date spend — does not reset when the chart shows only this week or one day. */
+  const remainingBudget = Math.max(0, budget - spentThisCalendarMonth);
 
   const today = new Date();
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
@@ -239,6 +236,51 @@ export default function HomeScreen() {
   const safeToSpend = toDateEnabled
     ? remainingBudget / daysLeftInMonth
     : remainingBudget;
+
+  return (
+    <>
+      <BalanceCard amountUsd={netBalanceAllTime} />
+
+      <IncomeExpenseCard incomeUsd={totalIncome} expensesUsd={totalExpenses} />
+
+      <BudgetCard
+        budgetUsd={budget}
+        remainingUsd={remainingBudget}
+        expensesUsd={spentThisCalendarMonth}
+      />
+
+      <SafeToSpendCard safeToSpendUsd={safeToSpend} />
+
+      <View style={styles.chartSection}>
+        <SpendingChart
+          data={chartData}
+          selectedIndex={toDateEnabled ? null : (selectedBarIndex ?? defaultDayBarIndex)}
+          onBarPress={handleBarPress}
+          weekOffset={weekOffset}
+          maxWeekOffset={MAX_WEEK_OFFSET}
+          onWeekChange={handleWeekChange}
+          weekLabel={weekLabel}
+          toDateEnabled={toDateEnabled}
+          onToDateToggle={handleToDateToggle}
+        />
+      </View>
+
+      {recentTransactions.length > 0 ? (
+        <TransactionList
+          transactions={recentTransactions}
+          onPressSeeAll={() => router.push('/(tabs)/transaction')}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export default function HomeScreen() {
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+  const refreshAllData = useStore((state) => state.refreshAllData);
+  const isInitialSyncComplete = useStore((state) => state.isInitialSyncComplete);
+  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top']}>
@@ -259,41 +301,7 @@ export default function HomeScreen() {
             progressBackgroundColor={theme.card}
           />
         }>
-        <BalanceCard amountUsd={netBalanceAllTime} />
-        
-        <IncomeExpenseCard
-          incomeUsd={totalIncome}
-          expensesUsd={totalExpenses}
-        />
-        
-        <BudgetCard 
-          budgetUsd={budget} 
-          remainingUsd={remainingBudget} 
-          expensesUsd={totalExpenses} 
-        />
-        
-        <SafeToSpendCard safeToSpendUsd={safeToSpend} />
-
-        <View style={styles.chartSection}>
-          <SpendingChart
-            data={chartData}
-            selectedIndex={toDateEnabled ? null : (selectedBarIndex ?? defaultDayBarIndex)}
-            onBarPress={handleBarPress}
-            weekOffset={weekOffset}
-            maxWeekOffset={MAX_WEEK_OFFSET}
-            onWeekChange={handleWeekChange}
-            weekLabel={weekLabel}
-            toDateEnabled={toDateEnabled}
-            onToDateToggle={handleToDateToggle}
-          />
-        </View>
-
-        {recentTransactions.length > 0 ? (
-          <TransactionList
-            transactions={recentTransactions}
-            onPressSeeAll={() => router.push('/(tabs)/transaction')}
-          />
-        ) : null}
+        {!isInitialSyncComplete ? <HomeScreenSkeleton /> : <HomeScreenLoaded />}
 
         <View style={styles.scrollFooter} accessible accessibilityLabel="Made with love for Zorvyn">
           <View style={styles.footerRow}>

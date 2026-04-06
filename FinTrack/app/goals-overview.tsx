@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AddToGoalModal from '@/components/goals/AddToGoalModal';
@@ -9,6 +9,7 @@ import { CurrencyText } from '@/components/currency-text';
 import { ThemedText } from '@/components/themed-text';
 import PrimaryButton from '@/components/ui/primary-button';
 import { Fonts } from '@/constants/theme';
+import { useAppAlert } from '@/context/app-alert-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -181,6 +182,7 @@ function EmptyCard({
 
 export default function GoalsOverviewScreen() {
   const router = useRouter();
+  const { showAlert } = useAppAlert();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
 
@@ -225,13 +227,13 @@ export default function GoalsOverviewScreen() {
       if (!allocateTarget) return;
       try {
         await allocateToGoal(allocateTarget.id, amountUsd);
-        Alert.alert('Allocated', `Added to ${allocateTarget.title}.`);
+        showAlert({ title: 'Allocated', message: `Added to ${allocateTarget.title}.` });
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Something went wrong';
-        Alert.alert('Could not allocate', msg);
+        showAlert({ title: 'Could not allocate', message: msg });
       }
     },
-    [allocateTarget, allocateToGoal],
+    [allocateTarget, allocateToGoal, showAlert],
   );
 
   return (

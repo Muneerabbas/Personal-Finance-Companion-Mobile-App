@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import {
@@ -11,12 +12,12 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import TransactionDetailModal from '@/components/home/TransactionDetailModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CurrencyText } from '@/components/currency-text';
 import { type Transaction } from '@/components/home/TransactionItem';
 import AppHeader from '@/components/layout/AppHeader';
+import { TransactionScreenSkeleton } from '@/components/skeletons/screen-skeletons';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -165,29 +166,37 @@ function filterLabel(value: TransactionFilter) {
   return 'Expenses';
 }
 
-export default function TransactionScreen() {
+type TransactionScreenLoadedProps = {
+  filter: TransactionFilter;
+  searchText: string;
+  refreshing: boolean;
+  onRefresh: () => void;
+  listSlotHeight: number;
+};
+
+/** List + data work only mounts after sync so inactive tabs avoid heavy work while loading. */
+function TransactionScreenLoaded({
+  filter,
+  searchText,
+  refreshing,
+  onRefresh,
+  listSlotHeight,
+}: TransactionScreenLoadedProps) {
+  const router = useRouter();
   const transactions = useStore(state => state.transactions);
-  const refreshAllData = useStore(state => state.refreshAllData);
   const colorScheme = useColorScheme() ?? 'dark';
   const theme = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
-  const [filter, setFilter] = useState<TransactionFilter>('all');
-  const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
   const normalizedQuery = deferredSearchText.trim().toLowerCase();
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  const [listSlotHeight, setListSlotHeight] = useState(0);
   const { height: windowHeight } = useWindowDimensions();
 
-  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
-
-  const handleTxPress = useCallback((item: Transaction) => {
-    setSelectedTx(item);
-  }, []);
-
-  const handleModalClose = useCallback(() => {
-    setSelectedTx(null);
-  }, []);
+  const handleTxPress = useCallback(
+    (item: Transaction) => {
+      router.push({ pathname: '/transaction-detail', params: { id: item.id } });
+    },
+    [router],
+  );
 
   const sections = useMemo(
     () => buildSections(transactions, filter, normalizedQuery),
@@ -299,12 +308,73 @@ export default function TransactionScreen() {
     [handleTxPress, isDark, theme.text, theme.muted],
   );
 
+  const emptyScrollMinHeight = listSlotHeight > 0 ? listSlotHeight : Math.max(320, windowHeight * 0.55);
+
+  return sections.length > 0 ? (
+    <FlatList
+      data={sections}
+      keyExtractor={(s) => s.id}
+      renderItem={renderSection}
+      contentContainerStyle={styles.listContent}
+      style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={refreshControlEl}
+    />
+  ) : (
+    <ScrollView
+      style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
+      contentContainerStyle={[styles.emptyScrollContent, { minHeight: emptyScrollMinHeight }]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={refreshControlEl}>
+      <View style={styles.emptyCenterBlock}>
+        <View
+          style={[
+            styles.emptyCard,
+            {
+              backgroundColor: isDark ? '#1C2230' : '#FFFFFF',
+              borderColor: isDark ? '#2E3748' : theme.border,
+            },
+          ]}>
+          <Ionicons name="receipt-outline" size={28} color={isDark ? '#A8B3C8' : theme.muted} />
+          <ThemedText style={[styles.emptyTitle, { color: isDark ? '#F2F5FD' : theme.text }]}>
+            No transactions found
+          </ThemedText>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+export default function TransactionScreen() {
+  const refreshAllData = useStore(state => state.refreshAllData);
+  const isInitialSyncComplete = useStore(state => state.isInitialSyncComplete);
+  const colorScheme = useColorScheme() ?? 'dark';
+  const theme = Colors[colorScheme];
+  const isDark = colorScheme === 'dark';
+  const [filter, setFilter] = useState<TransactionFilter>('all');
+  const [searchText, setSearchText] = useState('');
+  const [listSlotHeight, setListSlotHeight] = useState(0);
+  const { height: windowHeight } = useWindowDimensions();
+  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
+
   const onListSlotLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
     setListSlotHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h));
   }, []);
 
   const emptyScrollMinHeight = listSlotHeight > 0 ? listSlotHeight : Math.max(320, windowHeight * 0.55);
+
+  const skeletonRefresh = (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor={theme.primary}
+      colors={[theme.primary]}
+      progressBackgroundColor={isDark ? '#171C28' : theme.card}
+    />
+  );
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#0E1220' : theme.background }]} edges={['top']}>
@@ -377,45 +447,26 @@ export default function TransactionScreen() {
         </View>
 
         <View style={styles.listSlot} onLayout={onListSlotLayout}>
-          {sections.length > 0 ? (
-            <FlatList
-              data={sections}
-              keyExtractor={(s) => s.id}
-              renderItem={renderSection}
-              contentContainerStyle={styles.listContent}
-              style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              refreshControl={refreshControlEl}
-            />
-          ) : (
+          {!isInitialSyncComplete ? (
             <ScrollView
               style={[styles.container, { backgroundColor: isDark ? '#0E1220' : theme.background }]}
-              contentContainerStyle={[styles.emptyScrollContent, { minHeight: emptyScrollMinHeight }]}
+              contentContainerStyle={[styles.listContent, styles.emptyScrollContent, { minHeight: emptyScrollMinHeight }]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              refreshControl={refreshControlEl}>
-              <View style={styles.emptyCenterBlock}>
-                <View
-                  style={[
-                    styles.emptyCard,
-                    {
-                      backgroundColor: isDark ? '#1C2230' : '#FFFFFF',
-                      borderColor: isDark ? '#2E3748' : theme.border,
-                    },
-                  ]}>
-                  <Ionicons name="receipt-outline" size={28} color={isDark ? '#A8B3C8' : theme.muted} />
-                  <ThemedText style={[styles.emptyTitle, { color: isDark ? '#F2F5FD' : theme.text }]}>
-                    No transactions found
-                  </ThemedText>
-                </View>
-              </View>
+              refreshControl={skeletonRefresh}>
+              <TransactionScreenSkeleton />
             </ScrollView>
+          ) : (
+            <TransactionScreenLoaded
+              filter={filter}
+              searchText={searchText}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              listSlotHeight={listSlotHeight}
+            />
           )}
         </View>
       </View>
-
-      <TransactionDetailModal visible={selectedTx !== null} transaction={selectedTx} onClose={handleModalClose} />
     </SafeAreaView>
   );
 }

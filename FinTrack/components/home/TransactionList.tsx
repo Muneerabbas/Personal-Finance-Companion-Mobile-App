@@ -1,11 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import TransactionItem, { type Transaction } from './TransactionItem';
-import TransactionDetailModal from './TransactionDetailModal';
 
 type TransactionListProps = {
   transactions: Transaction[];
@@ -20,19 +20,17 @@ export default function TransactionList({
   title = 'Recent Transactions',
   showSeeAll = true,
 }: TransactionListProps) {
+  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const accent = Colors[colorScheme].primary;
 
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-
-  const handlePress = useCallback((item: Transaction) => {
-    setSelectedTx(item);
-  }, []);
-
-  const handleClose = useCallback(() => {
-    setSelectedTx(null);
-  }, []);
+  const handlePress = useCallback(
+    (item: Transaction) => {
+      router.push({ pathname: '/transaction-detail', params: { id: item.id } });
+    },
+    [router],
+  );
 
   return (
     <View>
@@ -50,12 +48,6 @@ export default function TransactionList({
           <TransactionItem key={transaction.id} item={transaction} onPress={handlePress} />
         ))}
       </View>
-
-      <TransactionDetailModal
-        visible={selectedTx !== null}
-        transaction={selectedTx}
-        onClose={handleClose}
-      />
     </View>
   );
 }

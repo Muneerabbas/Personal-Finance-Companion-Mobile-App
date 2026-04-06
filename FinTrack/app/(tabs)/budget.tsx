@@ -1,12 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppHeader from '@/components/layout/AppHeader';
+import { BudgetScreenSkeleton } from '@/components/skeletons/screen-skeletons';
 import { ThemedText } from '@/components/themed-text';
 import { OTHER_CATEGORY_LABEL, isSpendingExpense, visualForCategory } from '@/constants/transaction-category-styles';
 import { Fonts } from '@/constants/theme';
@@ -101,10 +101,8 @@ function weeklyBarsFromExpenses(count: number, expenseAmounts: number[]) {
   }));
 }
 
-export default function BudgetScreen() {
-  const router = useRouter();
+function BudgetScreenLoaded() {
   const allTransactions = useStore((state) => state.transactions);
-  const refreshAllData = useStore((state) => state.refreshAllData);
   const { formatUsd } = useCurrency();
   const colorScheme = useColorScheme() ?? 'dark';
   const isDark = colorScheme === 'dark';
@@ -113,8 +111,6 @@ export default function BudgetScreen() {
 
   const [monthOffset, setMonthOffset] = useState(0);
   const MAX_MONTH_OFFSET = 3; // 4 months total
-
-  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
 
   // Find earliest transaction month to cap navigation
   const earliestMonthsBack = useMemo(() => {
@@ -308,24 +304,7 @@ export default function BudgetScreen() {
   const errorSurface = isDark ? 'rgba(248,113,113,0.16)' : 'rgba(220,38,38,0.12)';
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: backgroundToken }]} edges={['top']}>
-      <View style={styles.headerWrap}>
-        <AppHeader />
-      </View>
-      <ScrollView
-        style={[styles.container, { backgroundColor: backgroundToken }]}
-        contentContainerStyle={[styles.content, styles.scrollContentGrow]}
-        showsVerticalScrollIndicator={false}
-        alwaysBounceVertical
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={primaryForeground}
-            colors={[primaryForeground]}
-            progressBackgroundColor={cardToken}
-          />
-        }>
+    <>
         <View style={styles.headerBlock}>
           <ThemedText style={styles.heroTitle}>Financial insights</ThemedText>
           <View style={styles.monthNav}>
@@ -559,8 +538,38 @@ export default function BudgetScreen() {
             </View>
           </View>
         </View>
+    </>
+  );
+}
 
-        
+export default function BudgetScreen() {
+  const refreshAllData = useStore((state) => state.refreshAllData);
+  const isInitialSyncComplete = useStore((state) => state.isInitialSyncComplete);
+  const { refreshing, onRefresh } = usePullRefresh(refreshAllData);
+  const primaryForeground = useThemeColor({}, 'primary');
+  const cardToken = useThemeColor({}, 'card');
+  const backgroundToken = useThemeColor({}, 'background');
+
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: backgroundToken }]} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <AppHeader />
+      </View>
+      <ScrollView
+        style={[styles.container, { backgroundColor: backgroundToken }]}
+        contentContainerStyle={[styles.content, styles.scrollContentGrow]}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={primaryForeground}
+            colors={[primaryForeground]}
+            progressBackgroundColor={cardToken}
+          />
+        }>
+        {!isInitialSyncComplete ? <BudgetScreenSkeleton /> : <BudgetScreenLoaded />}
       </ScrollView>
     </SafeAreaView>
   );

@@ -38,7 +38,7 @@ export function createTransactionPayload({
   customCategory = '',
 }: CreateTransactionParams): TransactionPayload {
   const finalAmount = type === 'expense' ? -Math.abs(amount) : Math.abs(amount);
-  
+
   return {
     id: generateId(),
     amount: finalAmount,
@@ -49,6 +49,15 @@ export function createTransactionPayload({
     wallet,
     customCategory,
   };
+}
+
+/** Same as create payload but preserves id and createdAt for Supabase updates. */
+export function createTransactionPayloadForUpdate(
+  params: CreateTransactionParams,
+  existing: { id: string; createdAt: string },
+): TransactionPayload {
+  const base = createTransactionPayload(params);
+  return { ...base, id: existing.id, createdAt: existing.createdAt };
 }
 
 export function mapPayloadToUITransaction(payload: TransactionPayload): Transaction {

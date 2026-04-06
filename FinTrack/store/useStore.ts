@@ -1,10 +1,29 @@
 import { create } from 'zustand';
-import { getTransactions, addTransaction as apiAddTransaction } from '@/api/transactions';
+import {
+  addTransaction as apiAddTransaction,
+  deleteTransactionById,
+  getTransactions,
+  updateTransactionById,
+} from '@/api/transactions';
 import { getGoals, addGoal as apiAddGoal, patchGoalSavedAmount } from '@/api/goals';
 import { getBudget, setBudget as apiSetBudget } from '@/api/budget';
 import { GOAL_SAVING_CATEGORY, isSpendingExpense } from '@/constants/transaction-category-styles';
-import { createTransactionPayload } from '@/lib/transaction-helper';
+import { createTransactionPayload, type TransactionPayload } from '@/lib/transaction-helper';
 import { supabase } from '@/lib/supabase';
+
+/** Coalesce parallel `refreshAllData` calls (e.g. tab layout + home mount). */
+let refreshAllDataInFlight: Promise<void> | null = null;
+
+/** YYYY-MM-DD in local time — matches dashboard date bucketing */
+function localDateKeyFromTx(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function currentMonthKeyLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 interface AppState {
   transactions: any[];
@@ -12,11 +31,17 @@ interface AppState {
   monthlyBudget: number | null;
   loading: boolean;
   user: any | null;
+  /** First global sync (transactions + goals + budget) finished while signed in. */
+  isInitialSyncComplete: boolean;
+  /** `refreshAllData` currently running. */
+  syncInProgress: boolean;
   
   // Actions
   fetchUser: () => Promise<void>;
   fetchTransactions: () => Promise<void>;
   addTransaction: (payload: any) => Promise<void>;
+  updateExistingTransaction: (id: string, payload: TransactionPayload) => Promise<void>;
+  removeTransaction: (id: string) => Promise<void>;
   /** Records a goal allocation (category goal_saving) and increases goal.saved_amount when balance allows */
   allocateToGoal: (goalId: string, amountUsd: number) => Promise<void>;
   fetchGoals: () => Promise<void>;
@@ -31,6 +56,8 @@ interface AppState {
   getTotalExpenses: () => number;
   getNetBalance: () => number;
   getRemainingBudget: () => number | null;
+  /** Discretionary spending (excl. goal transfers) in the current calendar month, local time. */
+  getDiscretionarySpentThisCalendarMonth: () => number;
   getPotentialSavings: () => number | null;
 }
 
@@ -40,6 +67,8 @@ export const useStore = create<AppState>((set, get) => ({
   monthlyBudget: null,
   loading: false,
   user: null,
+  isInitialSyncComplete: false,
+  syncInProgress: false,
 
   fetchUser: async () => {
     await supabase.auth.refreshSession().catch(() => {});
@@ -69,6 +98,36 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const newTx = await apiAddTransaction(payload);
       set((state) => ({ transactions: [newTx, ...state.transactions] }));
+    } catch (error) {
+      console.error(error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  updateExistingTransaction: async (id, payload) => {
+    set({ loading: true });
+    try {
+      const updated = await updateTransactionById(id, payload);
+      set((state) => ({
+        transactions: state.transactions.map((t) => (String(t.id) === String(id) ? updated : t)),
+      }));
+    } catch (error) {
+      console.error(error);
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  removeTransaction: async (id) => {
+    set({ loading: true });
+    try {
+      await deleteTransactionById(id);
+      set((state) => ({
+        transactions: state.transactions.filter((t) => String(t.id) !== String(id)),
+      }));
     } catch (error) {
       console.error(error);
       throw error;
@@ -169,41 +228,57 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   refreshAllData: async () => {
-    // Prefer local session first (reliable right after login); getUser() can lag or fail on cold start.
-    const { data: { session } } = await supabase.auth.getSession();
-    let user = session?.user ?? null;
-    if (!user) {
-      const { data: { user: u } } = await supabase.auth.getUser();
-      user = u ?? null;
+    if (refreshAllDataInFlight) {
+      return refreshAllDataInFlight;
     }
-    if (!user) {
-      return;
-    }
-    set({ user });
+    refreshAllDataInFlight = (async () => {
+      set({ syncInProgress: true });
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        let user = session?.user ?? null;
+        if (!user) {
+          const {
+            data: { user: u },
+          } = await supabase.auth.getUser();
+          user = u ?? null;
+        }
+        if (!user) {
+          set({ isInitialSyncComplete: false });
+          return;
+        }
+        set({ user });
 
-    const [txResult, goalsResult, budgetResult] = await Promise.allSettled([
-      getTransactions(),
-      getGoals(),
-      getBudget(),
-    ]);
+        const [txResult, goalsResult, budgetResult] = await Promise.allSettled([
+          getTransactions(),
+          getGoals(),
+          getBudget(),
+        ]);
 
-    const patch: Partial<Pick<AppState, 'transactions' | 'goals' | 'monthlyBudget'>> = {};
-    if (txResult.status === 'fulfilled') {
-      patch.transactions = txResult.value;
-    } else {
-      console.error(txResult.reason);
-    }
-    if (goalsResult.status === 'fulfilled') {
-      patch.goals = goalsResult.value;
-    } else {
-      console.error(goalsResult.reason);
-    }
-    if (budgetResult.status === 'fulfilled') {
-      patch.monthlyBudget = budgetResult.value?.monthly_limit ?? null;
-    } else {
-      console.error(budgetResult.reason);
-    }
-    set(patch);
+        const patch: Partial<Pick<AppState, 'transactions' | 'goals' | 'monthlyBudget'>> = {};
+        if (txResult.status === 'fulfilled') {
+          patch.transactions = txResult.value;
+        } else {
+          console.error(txResult.reason);
+        }
+        if (goalsResult.status === 'fulfilled') {
+          patch.goals = goalsResult.value;
+        } else {
+          console.error(goalsResult.reason);
+        }
+        if (budgetResult.status === 'fulfilled') {
+          patch.monthlyBudget = budgetResult.value?.monthly_limit ?? null;
+        } else {
+          console.error(budgetResult.reason);
+        }
+        set({ ...patch, isInitialSyncComplete: true });
+      } finally {
+        set({ syncInProgress: false });
+        refreshAllDataInFlight = null;
+      }
+    })();
+    return refreshAllDataInFlight;
   },
 
   setBudget: async (limit) => {
@@ -246,14 +321,24 @@ export const useStore = create<AppState>((set, get) => ({
     return income - out;
   },
 
+  getDiscretionarySpentThisCalendarMonth: () => {
+    const { transactions } = get();
+    const monthKey = currentMonthKeyLocal();
+    let sum = 0;
+    for (const tx of transactions) {
+      if (!tx.date || !isSpendingExpense(tx)) continue;
+      const key = localDateKeyFromTx(tx.date);
+      if (key.slice(0, 7) !== monthKey) continue;
+      sum += Math.abs(Number(tx.amount));
+    }
+    return sum;
+  },
+
   getRemainingBudget: () => {
-    const { monthlyBudget, transactions } = get();
+    const { monthlyBudget } = get();
     if (!monthlyBudget) return null;
-    
-    // Only count expenses for the current month. For simplicity here, we count all.
-    // In a real app, we filter by date. Assuming dashboard is current month:
-    const totalExpenses = get().getTotalExpenses();
-    return Number(monthlyBudget) - totalExpenses;
+    const spentMtd = get().getDiscretionarySpentThisCalendarMonth();
+    return Number(monthlyBudget) - spentMtd;
   },
   
   getPotentialSavings: () => {

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AddToGoalModal from '@/components/goals/AddToGoalModal';
@@ -10,9 +10,11 @@ import CreateGoalModal, { type CreateGoalSubmitPayload } from '@/components/goal
 import SetMonthlyBudgetCard from '@/components/goals/SetMonthlyBudgetCard';
 import { CurrencyText } from '@/components/currency-text';
 import AppHeader from '@/components/layout/AppHeader';
+import { GoalsScreenSkeleton } from '@/components/skeletons/screen-skeletons';
 import PrimaryButton from '@/components/ui/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
+import { useAppAlert } from '@/context/app-alert-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -328,8 +330,9 @@ function GoalsEmptyState({
   );
 }
 
-export default function GoalsScreen() {
+function GoalsScreenLoaded() {
   const router = useRouter();
+  const { showAlert } = useAppAlert();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
 
@@ -343,17 +346,12 @@ export default function GoalsScreen() {
   const insightInner = isDark ? '#151a28' : '#F8FAFC';
 
   const goals = useStore((state) => state.goals);
-  const fetchGoals = useStore((state) => state.fetchGoals);
   const addGoal = useStore((state) => state.addGoal);
   const netBalance = useStore((state) => state.getNetBalance());
   const allocateToGoal = useStore((state) => state.allocateToGoal);
 
   const [allocateTarget, setAllocateTarget] = useState<{ id: string; title: string } | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
-
-  useEffect(() => {
-    fetchGoals();
-  }, [fetchGoals]);
 
   const pullRefreshGoals = useCallback(() => useStore.getState().refreshAllData(), []);
   const { refreshing, onRefresh } = usePullRefresh(pullRefreshGoals);
@@ -369,13 +367,13 @@ export default function GoalsScreen() {
       if (!allocateTarget) return;
       try {
         await allocateToGoal(allocateTarget.id, amountUsd);
-        Alert.alert('Allocated', `Added to ${allocateTarget.title}.`);
+        showAlert({ title: 'Allocated', message: `Added to ${allocateTarget.title}.` });
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Something went wrong';
-        Alert.alert('Could not allocate', msg);
+        showAlert({ title: 'Could not allocate', message: msg });
       }
     },
-    [allocateTarget, allocateToGoal],
+    [allocateTarget, allocateToGoal, showAlert],
   );
 
   const handleCreateGoal = useCallback(
@@ -388,9 +386,9 @@ export default function GoalsScreen() {
         icon: 'star',
         is_primary: payload.is_primary,
       });
-      Alert.alert('Goal created', `${payload.title} is ready to fund.`);
+      showAlert({ title: 'Goal created', message: `${payload.title} is ready to fund.` });
     },
-    [addGoal],
+    [addGoal, showAlert],
   );
 
   const { activeGoals, completedGoals } = useMemo(() => {
@@ -418,10 +416,7 @@ export default function GoalsScreen() {
   const insightTitle = primaryGoal?.title ?? 'savings';
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: background }]} edges={['top']}>
-      <View style={styles.headerWrap}>
-        <AppHeader />
-      </View>
+    <>
       <ScrollView
         style={[styles.scroll, { backgroundColor: background }]}
         contentContainerStyle={[styles.content, styles.scrollContentGrow]}
@@ -436,146 +431,146 @@ export default function GoalsScreen() {
             progressBackgroundColor={card}
           />
         }>
-        <View style={styles.pageTitleRow}>
-          <View style={styles.pageTitleBlock}>
-            <ThemedText type="title" style={[styles.pageTitle, { color: text }]}>
-              Financial goals
-            </ThemedText>
-            <ThemedText style={[styles.pageSubtitle, { color: muted }]}>
-              Strategic planning for your future.
-            </ThemedText>
-          </View>
-          <PrimaryButton
-            variant="outline"
-            title="Add Goal"
-            onPress={() => setCreateModalVisible(true)}
-            accessibilityLabel="Add a new goal"
-            leftAccessory={<Ionicons name="add" size={20} color={primary} />}
-            style={[styles.addGoalHeaderBtn, { height: 44, borderColor: primary }]}
-            textStyle={[styles.addGoalHeaderBtnText, { color: primary }]}
-          />
-        </View>
-
-        <View style={[styles.availableStrip, { backgroundColor: card, borderColor: border }]}>
-          <ThemedText style={[styles.availableStripText, { color: muted }]}>
-            Available to allocate:{' '}
-            <CurrencyText
-              amountUsd={availableToAllocateUsd}
-              style={{ color: text, fontFamily: Fonts.bold, fontSize: 15 }}
-            />
-          </ThemedText>
-        </View>
-
-        <SetMonthlyBudgetCard />
-
-        <View style={styles.bento}>
-          {hasGoals && primaryGoal ? (
-            <ActiveGoalCard
-              goal={{
-                title: primaryGoal.title,
-                target_amount: Number(primaryGoal.target_amount) || 0,
-                saved_amount: Number(primaryGoal.saved_amount) || 0,
-              }}
-              cardBg={card}
-              border={border}
-              text={text}
-              muted={muted}
-              primary={primary}
-              trackBg={trackBg}
-              showAddButton={Boolean(primaryGoal.id)}
-              onAddToGoal={
-                primaryGoal.id
-                  ? () => openAllocate(String(primaryGoal.id), primaryGoal.title)
-                  : undefined
-              }
-            />
-          ) : hasGoals && !primaryGoal ? (
-            <AllGoalsCompletedHero cardBg={card} border={border} text={text} muted={muted} isDark={isDark} />
-          ) : (
-            <GoalsEmptyState
-              cardBg={card}
-              border={border}
-              text={text}
-              muted={muted}
-              primary={primary}
-              onAddGoal={() => setCreateModalVisible(true)}
-            />
-          )}
-        </View>
-
-        {milestoneGoals.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHead}>
-              <ThemedText style={[styles.sectionTitle, { color: text }]}>Upcoming milestones</ThemedText>
-              <Pressable onPress={() => router.push('/goals-overview')}>
-                <ThemedText style={[styles.viewAll, { color: primary }]}>View all</ThemedText>
-              </Pressable>
+            <View style={styles.pageTitleRow}>
+              <View style={styles.pageTitleBlock}>
+                <ThemedText type="title" style={[styles.pageTitle, { color: text }]}>
+                  Financial goals
+                </ThemedText>
+                <ThemedText style={[styles.pageSubtitle, { color: muted }]}>
+                  Strategic planning for your future.
+                </ThemedText>
+              </View>
+              <PrimaryButton
+                variant="outline"
+                title="Add Goal"
+                onPress={() => setCreateModalVisible(true)}
+                accessibilityLabel="Add a new goal"
+                leftAccessory={<Ionicons name="add" size={20} color={primary} />}
+                style={[styles.addGoalHeaderBtn, { height: 44, borderColor: primary }]}
+                textStyle={[styles.addGoalHeaderBtnText, { color: primary }]}
+              />
             </View>
-            <View style={styles.milestoneList}>
-              {milestoneGoals.map((g, i) => {
-                const p = g.target_amount ? Math.round((g.saved_amount / g.target_amount) * 100) : 0;
-                return (
-                  <MilestoneRow
-                    key={g.id ?? i}
-                    icon={iconForGoal(g.icon)}
-                    title={g.title}
-                    amountUsd={g.target_amount}
-                    progress={p}
-                    usePrimaryAccent={!!g.is_primary || i % 2 === 1}
-                    cardBg={card}
-                    border={border}
-                    text={text}
-                    muted={muted}
-                    primary={primary}
-                    trackBg={trackBg}
-                    showAddButton={Boolean(g.id)}
-                    onAddToGoal={g.id ? () => openAllocate(String(g.id), g.title) : undefined}
-                  />
-                );
-              })}
-            </View>
-          </View>
-        )}
 
-        {completedGoals.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHead}>
-              <ThemedText style={[styles.sectionTitle, { color: text }]}>Completed goals</ThemedText>
-              <Pressable onPress={() => router.push('/goals-overview')}>
-                <ThemedText style={[styles.viewAll, { color: primary }]}>View all</ThemedText>
-              </Pressable>
+            <View style={[styles.availableStrip, { backgroundColor: card, borderColor: border }]}>
+              <ThemedText style={[styles.availableStripText, { color: muted }]}>
+                Available to allocate:{' '}
+                <CurrencyText
+                  amountUsd={availableToAllocateUsd}
+                  style={{ color: text, fontFamily: Fonts.bold, fontSize: 15 }}
+                />
+              </ThemedText>
             </View>
-            <View style={styles.milestoneList}>
-              {completedGoals.map((g, i) => (
-                <CompletedGoalRow
-                  key={g.id ?? `done-${i}`}
-                  title={g.title}
-                  savedUsd={Number(g.saved_amount) || 0}
-                  targetUsd={Number(g.target_amount) || 0}
+
+            <SetMonthlyBudgetCard />
+
+            <View style={styles.bento}>
+              {hasGoals && primaryGoal ? (
+                <ActiveGoalCard
+                  goal={{
+                    title: primaryGoal.title,
+                    target_amount: Number(primaryGoal.target_amount) || 0,
+                    saved_amount: Number(primaryGoal.saved_amount) || 0,
+                  }}
                   cardBg={card}
                   border={border}
                   text={text}
                   muted={muted}
+                  primary={primary}
                   trackBg={trackBg}
-                  isDark={isDark}
+                  showAddButton={Boolean(primaryGoal.id)}
+                  onAddToGoal={
+                    primaryGoal.id
+                      ? () => openAllocate(String(primaryGoal.id), primaryGoal.title)
+                      : undefined
+                  }
                 />
-              ))}
+              ) : hasGoals && !primaryGoal ? (
+                <AllGoalsCompletedHero cardBg={card} border={border} text={text} muted={muted} isDark={isDark} />
+              ) : (
+                <GoalsEmptyState
+                  cardBg={card}
+                  border={border}
+                  text={text}
+                  muted={muted}
+                  primary={primary}
+                  onAddGoal={() => setCreateModalVisible(true)}
+                />
+              )}
             </View>
-          </View>
-        )}
 
-        {hasActiveGoals ? (
-          <SmartInsight
-            goalTitle={insightTitle}
-            text='By cutting back on "Dining out" by 15% next month, you could reach your'
-            muted={muted}
-            primary={primary}
-            cardBg={card}
-            border={border}
-            innerBg={insightInner}
-            onAdjustBudget={() => router.push('/(tabs)/budget')}
-          />
-        ) : null}
+            {milestoneGoals.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHead}>
+                  <ThemedText style={[styles.sectionTitle, { color: text }]}>Upcoming milestones</ThemedText>
+                  <Pressable onPress={() => router.push('/goals-overview')}>
+                    <ThemedText style={[styles.viewAll, { color: primary }]}>View all</ThemedText>
+                  </Pressable>
+                </View>
+                <View style={styles.milestoneList}>
+                  {milestoneGoals.map((g, i) => {
+                    const p = g.target_amount ? Math.round((g.saved_amount / g.target_amount) * 100) : 0;
+                    return (
+                      <MilestoneRow
+                        key={g.id ?? i}
+                        icon={iconForGoal(g.icon)}
+                        title={g.title}
+                        amountUsd={g.target_amount}
+                        progress={p}
+                        usePrimaryAccent={!!g.is_primary || i % 2 === 1}
+                        cardBg={card}
+                        border={border}
+                        text={text}
+                        muted={muted}
+                        primary={primary}
+                        trackBg={trackBg}
+                        showAddButton={Boolean(g.id)}
+                        onAddToGoal={g.id ? () => openAllocate(String(g.id), g.title) : undefined}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {completedGoals.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHead}>
+                  <ThemedText style={[styles.sectionTitle, { color: text }]}>Completed goals</ThemedText>
+                  <Pressable onPress={() => router.push('/goals-overview')}>
+                    <ThemedText style={[styles.viewAll, { color: primary }]}>View all</ThemedText>
+                  </Pressable>
+                </View>
+                <View style={styles.milestoneList}>
+                  {completedGoals.map((g, i) => (
+                    <CompletedGoalRow
+                      key={g.id ?? `done-${i}`}
+                      title={g.title}
+                      savedUsd={Number(g.saved_amount) || 0}
+                      targetUsd={Number(g.target_amount) || 0}
+                      cardBg={card}
+                      border={border}
+                      text={text}
+                      muted={muted}
+                      trackBg={trackBg}
+                      isDark={isDark}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {hasActiveGoals ? (
+              <SmartInsight
+                goalTitle={insightTitle}
+                text='By cutting back on "Dining out" by 15% next month, you could reach your'
+                muted={muted}
+                primary={primary}
+                cardBg={card}
+                border={border}
+                innerBg={insightInner}
+                onAdjustBudget={() => router.push('/(tabs)/budget')}
+              />
+            ) : null}
       </ScrollView>
 
       <CreateGoalModal
@@ -593,6 +588,43 @@ export default function GoalsScreen() {
         onClose={() => setAllocateTarget(null)}
         onAllocate={handleAllocate}
       />
+    </>
+  );
+}
+
+export default function GoalsScreen() {
+  const isInitialSyncComplete = useStore((state) => state.isInitialSyncComplete);
+  const background = useThemeColor({}, 'background');
+  const card = useThemeColor({}, 'card');
+  const primary = useThemeColor({}, 'primary');
+  const pullRefreshGoals = useCallback(() => useStore.getState().refreshAllData(), []);
+  const { refreshing, onRefresh } = usePullRefresh(pullRefreshGoals);
+
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: background }]} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <AppHeader />
+      </View>
+      {!isInitialSyncComplete ? (
+        <ScrollView
+          style={[styles.scroll, { backgroundColor: background }]}
+          contentContainerStyle={[styles.content, styles.scrollContentGrow]}
+          showsVerticalScrollIndicator={false}
+          alwaysBounceVertical
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={primary}
+              colors={[primary]}
+              progressBackgroundColor={card}
+            />
+          }>
+          <GoalsScreenSkeleton />
+        </ScrollView>
+      ) : (
+        <GoalsScreenLoaded />
+      )}
     </SafeAreaView>
   );
 }
