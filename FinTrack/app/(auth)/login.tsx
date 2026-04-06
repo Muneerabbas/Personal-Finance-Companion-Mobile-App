@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { AuthFormField } from '@/components/auth/AuthFormField';
@@ -11,6 +12,12 @@ import {
   loginEmailError,
   loginPasswordError,
 } from '@/lib/auth-field-validation';
+import {
+  clearBiometricLoginData,
+  getBiometricLabel,
+  isBiometricUnlockConfigured,
+  unlockBiometricSession,
+} from '@/lib/biometric-auth';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -23,6 +30,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [emailTyped, setEmailTyped] = useState(false);
   const [passwordTyped, setPasswordTyped] = useState(false);
+  const [biometricOffered, setBiometricOffered] = useState(false);
+  const [bioLabel, setBioLabel] = useState('Biometrics');
+  const [bioLoading, setBioLoading] = useState(false);
   const router = useRouter();
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
@@ -32,6 +42,53 @@ export default function Login() {
   const emailError = useMemo(() => loginEmailError(email, emailTyped), [email, emailTyped]);
   const passwordError = useMemo(() => loginPasswordError(password, passwordTyped), [password, passwordTyped]);
   const formValid = canSubmitLogin(email, password);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'web') {
+        setBiometricOffered(false);
+        return;
+      }
+      let cancelled = false;
+      (async () => {
+        const [configured, label] = await Promise.all([isBiometricUnlockConfigured(), getBiometricLabel()]);
+        if (!cancelled) {
+          setBiometricOffered(configured);
+          setBioLabel(label);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  async function signInWithBiometric() {
+    setBioLoading(true);
+    try {
+      const tokens = await unlockBiometricSession();
+      if (!tokens) {
+        showAlert({
+          title: 'Sign-in cancelled',
+          message: 'Biometric unlock did not complete. Try your password instead.',
+        });
+        return;
+      }
+      const { error } = await supabase.auth.setSession({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+      });
+      if (error) {
+        await clearBiometricLoginData();
+        showAlert({
+          title: 'Session expired',
+          message: 'Sign in again with your email and password. You can re-enable biometric login after that.',
+        });
+      }
+    } finally {
+      setBioLoading(false);
+    }
+  }
 
   async function signInWithEmail() {
     if (!formValid) return;
@@ -44,9 +101,8 @@ export default function Login() {
     if (error) {
       showAlert({ title: 'Sign In Failed', message: error.message });
       setLoading(false);
-    } else {
-      router.replace('/(tabs)');
     }
+    // Success: root `_layout` sends user to setup-biometric or (tabs).
   }
 
   return (
@@ -60,6 +116,30 @@ export default function Login() {
           Sign in to keep tracking your money with clarity.
         </Text>
 
+        {biometricOffered ? (
+          <Pressable
+            onPress={signInWithBiometric}
+            disabled={bioLoading}
+            style={({ pressed }) => [
+              styles.biometricCard,
+              {
+                borderColor: colors.primary,
+                backgroundColor: isDark ? 'rgba(139,124,255,0.12)' : 'rgba(127,61,255,0.08)',
+                opacity: pressed ? 0.92 : bioLoading ? 0.7 : 1,
+              },
+            ]}>
+            {bioLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="finger-print-outline" size={26} color={colors.primary} />
+                <Text style={[styles.biometricTitle, { color: colors.text }]}>Sign in with {bioLabel}</Text>
+                <Text style={[styles.biometricHint, { color: colors.muted }]}>Faster unlock on this device</Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
+
         <View
           style={[
             styles.card,
@@ -69,6 +149,9 @@ export default function Login() {
               shadowColor: isDark ? '#000' : '#1F1B2F',
             },
           ]}>
+          {biometricOffered ? (
+            <Text style={[styles.dividerLabel, { color: colors.muted }]}>or use email</Text>
+          ) : null}
           <AuthFormField
             label="Email"
             value={email}
@@ -153,7 +236,33 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 28,
+    marginBottom: 20,
+  },
+  biometricCard: {
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    marginBottom: 18,
+    alignItems: 'center',
+    gap: 4,
+  },
+  biometricTitle: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 16,
+    marginTop: 6,
+  },
+  biometricHint: {
+    fontFamily: Fonts.sans,
+    fontSize: 13,
+  },
+  dividerLabel: {
+    fontFamily: Fonts.sans,
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   card: {
     borderRadius: 24,

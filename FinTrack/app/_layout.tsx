@@ -22,6 +22,7 @@ import { CurrencyProvider } from '@/context/currency-context';
 import { ThemePreferenceProvider } from '@/context/theme-preference-context';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { replaceAfterSuccessfulAuth } from '@/lib/post-auth-routing';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -33,7 +34,15 @@ function RootStack() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const navigationTheme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
-  const { isReady, session, hasCompletedOnboarding } = useAuth();
+  const {
+    isReady,
+    session,
+    hasCompletedOnboarding,
+    biometricAppLockCheckComplete,
+    needsBiometricAppLock,
+    biometricAppLockSatisfied,
+    satisfyBiometricAppLock,
+  } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const [fontsLoaded] = useFonts({
@@ -43,7 +52,8 @@ function RootStack() {
     Poppins_700Bold,
   });
 
-  const appReady = fontsLoaded && isReady && hasCompletedOnboarding !== null;
+  const appReady =
+    fontsLoaded && isReady && hasCompletedOnboarding !== null && biometricAppLockCheckComplete;
 
   useEffect(() => {
     if (appReady) {
@@ -57,6 +67,8 @@ function RootStack() {
     const root = segments[0];
     const inAuth = root === '(auth)';
     const inOnboarding = root === 'onboarding';
+    const inUnlockApp = root === 'unlock-app';
+    const inSetupBiometric = root === 'setup-biometric';
 
     if (!hasCompletedOnboarding && !inOnboarding) {
       router.replace('/onboarding');
@@ -68,10 +80,43 @@ function RootStack() {
       return;
     }
 
-    if (session?.user && (inAuth || inOnboarding)) {
-      router.replace('/(tabs)');
+    const mustUnlockApp =
+      hasCompletedOnboarding &&
+      !!session?.user &&
+      needsBiometricAppLock &&
+      !biometricAppLockSatisfied;
+
+    if (mustUnlockApp) {
+      const allowed = inAuth || inOnboarding || inUnlockApp || inSetupBiometric;
+      if (!allowed) {
+        router.replace('/unlock-app');
+        return;
+      }
     }
-  }, [appReady, hasCompletedOnboarding, session?.user, segments, router]);
+
+    if (session?.user && inUnlockApp && (!needsBiometricAppLock || biometricAppLockSatisfied)) {
+      router.replace('/(tabs)');
+      return;
+    }
+
+    if (session?.user && inOnboarding) {
+      router.replace('/(tabs)');
+      return;
+    }
+
+    if (session?.user && inAuth) {
+      void replaceAfterSuccessfulAuth(router, { satisfyBiometricAppLock });
+    }
+  }, [
+    appReady,
+    hasCompletedOnboarding,
+    session?.user,
+    segments,
+    router,
+    needsBiometricAppLock,
+    biometricAppLockSatisfied,
+    satisfyBiometricAppLock,
+  ]);
 
   if (!appReady) {
     return null;
@@ -102,6 +147,8 @@ function RootStack() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="goals-overview" options={{ headerShown: false }} />
               <Stack.Screen name="transaction-detail" options={{ headerShown: false }} />
+              <Stack.Screen name="setup-biometric" options={{ headerShown: false }} />
+              <Stack.Screen name="unlock-app" options={{ headerShown: false }} />
               <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
             </Stack>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

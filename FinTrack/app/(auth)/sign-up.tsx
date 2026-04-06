@@ -64,9 +64,8 @@ export default function SignUp() {
       if (!session) {
         showAlert({ title: 'Check your email', message: 'Please check your inbox for email verification.' });
         setLoading(false);
-      } else {
-        router.replace('/(tabs)');
       }
+      // Session: root `_layout` navigates to setup-biometric or (tabs).
     }
   }
 

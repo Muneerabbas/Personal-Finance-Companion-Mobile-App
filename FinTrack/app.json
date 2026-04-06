@@ -41,6 +41,13 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow FinTrack to use Face ID for quicker sign-in."
+        }
       ]
     ],
     "experiments": {
